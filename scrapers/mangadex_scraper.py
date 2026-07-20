@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Scraper para MangaDex - API Oficial
+https://api.mangadex.org/
+Documentação: https://api.mangadex.org/docs.html
+"""
+
+import logging
+from typing import List, Dict, Optional
+from .base_scraper import BaseScraper, ScrapedResult
+
+logger = logging.getLogger(__name__)
+
+
+class MangaDexScraper(BaseScraper):
+    """
+    Scraper oficial da API MangaDex
+    Suporta pesquisa por título em português do Brasil
+    Retorna informações de mangás, capítulos e volumes
+    """
+    
+    def __init__(self):
+        super().__init__(
+            name="MangaDex",
+            base_url="https://api.mangadex.org",
+            language="pt-br"
+        )
+        self.api_version = "2"
+        # Configurar headers específicos para API
+        self.session.headers.update({
+            'Accept': 'application/json',
+        })
+    
+    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+        """
+        Pesquisa mangás na API MangaDex
+        Foca em conteúdo em português brasileiro
+        
+        Args:
+            query: Título ou termo de pesquisa
+            formats: Lista de formatos desejados (não aplicável para MangaDex, mas mantido por compatibilidade)
+        
+        Returns:
+            Lista de ScrapedResult com mangás encontrados
+        """
+        results = []
+        
+        try:
+            # Endpoint de pesquisa de mangás
+            search_url = f"{self.base_url}/manga"
+            params = {
+                'title': query,
+                'translatedLanguage[]': ['pt-br'],  # Apenas português brasileiro
+                'includes[]': ['cover_art'],  # Incluir arte da capa
+                'limit': 20,
+                'offset': 0
+            }
+            
+            response = self.make_request(search_url, params=params)
+            if not response:
+                return results
+            
+            data = response.json()
+            
+            for manga in data.get('data', []):
+                attributes = manga.get('attributes', {})
+                title_data = attributes.get('title', {})
+                
+                # Tentar obter título em português, senão usar inglês
+                title = title_data.get('pt-br') or title_data.get('en') or list(title_data.values())[0]
+                
+                # Obter ID do mangá para buscar capítulos
+                manga_id = manga.get('id')
+                manga_url = f"https://mangadex.org/title/{manga_id}"
+                
+                result = ScrapedResult(
+                    title=title,
+                    url=manga_url,
+                    source=self.name,
+                    format_type='cbz',  # MangaDex geralmente fornece CBZ
+                    series_name=title,
+                    language='pt-br',
+                    metadata={
+                        'manga_id': manga_id,
+                        'status': attributes.get('status'),
+                        'year': attributes.get('year'),
+                        'description': attributes.get('description', {}).get('pt-br', ''),
+                    }
+                )
+                results.append(result)
+                
+            logger.info(f"MangaDex: {len(results)} resultados para '{query}'")
+            
+        except Exception as e:
+            logger.error(f"Erro ao pesquisar no MangaDex: {e}")
+        
+        return results
+    
+    def get_series_info(self, series_url: str) -> Dict:
+        """
+        Obtém informações detalhadas da série
+        Inclui lista de capítulos, volumes e último lançamento
+        
+        Args:
+            series_url: URL da série no formato https://mangadex.org/title/{id}
+        
+        Returns:
+            Dict com informações da série
+        """
+        try:
+            # Extrair ID da URL
+            manga_id = series_url.rstrip('/').split('/')[-1]
+            
+            # Obter detalhes do mangá
+            manga_url = f"{self.base_url}/manga/{manga_id}"
+            params = {'includes[]': ['cover_art']}
+            
+            response = self.make_request(manga_url, params=params)
+            if not response:
+                return {}
+            
+            manga_data = response.json().get('data', {})
+            attributes = manga_data.get('attributes', {})
+            
+            # Obter capítulos
+            chapters_url = f"{self.base_url}/manga/{manga_id}/feed"
+            params = {
+                'translatedLanguage[]': ['pt-br'],
+                'order[volume]': 'asc',
+                'order[chapter]': 'asc',
+                'limit': 500,  # Máximo permitido
+                'includes[]': ['scanlation_group']
+            }
+            
+            chapters_response = self.make_request(chapters_url, params=params)
+            chapters_data = []
+            
+            if chapters_response:
+                chapters_json = chapters_response.json()
+                chapters_data = chapters_json.get('data', [])
+            
+            # Processar capítulos para encontrar volumes/capítulos disponíveis
+            available_chapters = []
+            volumes = set()
+            
+            for chapter in chapters_data:
+                chap_attrs = chapter.get('attributes', {})
+                chapter_num = chap_attrs.get('chapter')
+                volume_num = chap_attrs.get('volume')
+                
+                if volume_num:
+                    volumes.add(int(float(volume_num)))
+                
+                available_chapters.append({
+                    'chapter': float(chapter_num) if chapter_num else None,
+                    'volume': float(volume_num) if volume_num else None,
+                    'title': chap_attrs.get('title'),
+                    'chapter_id': chapter.get('id'),
+                })
+            
+            # Determinar primeiro e último volume/capítulo
+            first_volume = min(volumes) if volumes else None
+            last_volume = max(volumes) if volumes else None
+            
+            total_chapters = len([c for c in available_chapters if c['chapter']])
+            
+            return {
+                'manga_id': manga_id,
+                'title': attributes.get('title', {}).get('pt-br') or attributes.get('title', {}).get('en'),
+                'status': attributes.get('status'),
+                'year': attributes.get('year'),
+                'first_volume': first_volume,
+                'last_volume': last_volume,
+                'total_volumes': len(volumes),
+                'total_chapters': total_chapters,
+                'available_chapters': available_chapters,
+                'language': 'pt-br',
+                'url': series_url
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter informações da série: {e}")
+            return {}
+    
+    def get_chapter_download_url(self, chapter_id: str) -> Optional[str]:
+        """
+        Obtém URL de download para um capítulo específico
+        Usa o endpoint at-home server do MangaDex
+        
+        Args:
+            chapter_id: ID do capítulo
+        
+        Returns:
+            URL base para download das páginas
+        """
+        try:
+            url = f"{self.base_url}/at-home/server/{chapter_id}"
+            response = self.make_request(url)
+            
+            if response:
+                data = response.json()
+                if data.get('result') == 'ok':
+                    base_url = data['baseUrl']
+                    chapter_hash = data['chapter']['hash']
+                    pages = data['chapter']['data']
+                    
+                    return {
+                        'base_url': base_url,
+                        'hash': chapter_hash,
+                        'pages': pages,
+                        'force_port_443': data.get('forcePort443', False)
+                    }
+        except Exception as e:
+            logger.error(f"Erro ao obter URL de download do capítulo: {e}")
+        
+        return None
+    
+    def build_page_urls(self, chapter_info: Dict) -> List[str]:
+        """
+        Constrói URLs completas para todas as páginas de um capítulo
+        
+        Args:
+            chapter_info: Dict retornado por get_chapter_download_url
+        
+        Returns:
+            Lista de URLs das páginas
+        """
+        if not chapter_info:
+            return []
+        
+        base_url = chapter_info['base_url']
+        chapter_hash = chapter_info['hash']
+        pages = chapter_info['pages']
+        
+        page_urls = []
+        for page in pages:
+            page_url = f"{base_url}/data/{chapter_hash}/{page}"
+            page_urls.append(page_url)
+        
+        return page_urls
