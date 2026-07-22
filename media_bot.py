@@ -251,7 +251,8 @@ class MediaBot:
 
     def download_complete_series(self, series_title: str, media_type: str = "manga",
                                  source_name: str = "mangadex", skip_existing: bool = True,
-                                 progress_callback: Optional[Any] = None):
+                                 progress_callback: Optional[Any] = None,
+                                 should_cancel: Optional[Any] = None):
         """
         FLUXO PRINCIPAL: Baixa série completa do capítulo 1 ao último.
         1. Busca série
@@ -297,6 +298,9 @@ class MediaBot:
             failed_count = 0
             
             for chapter_num in missing_chapters:
+                if should_cancel is not None and should_cancel():
+                    print("   ⏹️  Download cancelado pelo usuário.")
+                    break
                 chapter_label = self._format_chapter_label(chapter_num)
                 print(f"\n   ⬇️  Baixando Capítulo {chapter_label}...")
                 
@@ -413,6 +417,60 @@ class MediaBot:
             status_icon = "✅" if progress['is_complete'] else "⏳"
             print(f"   {status_icon} {series.title}")
             print(f"      └─ {progress['completion_percentage']:.1f}% completo ({progress['chapters_downloaded']}/{progress['total_chapters_registered']} caps)")
+
+    def get_library_data(self) -> List[Dict[str, Any]]:
+        """Retorna dados estruturados de todas as séries (para a UI)."""
+        data = []
+        for series in self.library.list_all_series():
+            progress = self.library.get_series_progress(series)
+            data.append({
+                'title': progress['title'],
+                'status': progress['status'],
+                'completion_percentage': progress['completion_percentage'],
+                'chapters_downloaded': progress['chapters_downloaded'],
+                'total_chapters_registered': progress['total_chapters_registered'],
+                'is_complete': progress['is_complete'],
+                'source_name': series.source_name,
+            })
+        return data
+
+    def get_series_status_data(self, series_title: str) -> Dict[str, Any]:
+        """Retorna o progresso de uma coleção como dict (para a UI)."""
+        series = self.library.get_or_create_series(series_title)
+        return self.library.get_series_progress(series)
+
+    def dashboard_stats(self) -> Dict[str, Any]:
+        """Agrega estatísticas da biblioteca para o dashboard."""
+        from collections import defaultdict
+        from database import MediaFile
+
+        series_list = self.library.list_all_series()
+        total_downloaded = 0
+        complete = 0
+        missing_total = 0
+        by_source: Dict[str, int] = defaultdict(int)
+
+        for series in series_list:
+            progress = self.library.get_series_progress(series)
+            total_downloaded += progress['chapters_downloaded']
+            missing_total += len(progress['missing_chapters'])
+            if progress['is_complete']:
+                complete += 1
+            by_source[series.source_name or 'desconhecido'] += 1
+
+        by_format: Dict[str, int] = defaultdict(int)
+        session = self.library.session
+        for media_file in session.query(MediaFile).all():
+            by_format[media_file.file_format or 'desconhecido'] += 1
+
+        return {
+            'total_series': len(series_list),
+            'total_downloaded': total_downloaded,
+            'complete_collections': complete,
+            'missing_total': missing_total,
+            'by_format': dict(by_format),
+            'by_source': dict(by_source),
+        }
 
     def cleanup(self):
         """Limpeza final."""
