@@ -1,0 +1,1 @@
+"""GUIs legadas preservadas (Tkinter)."""

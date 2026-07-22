@@ -5,7 +5,7 @@ import tkinter as tk
 
 from cache_manager import CacheManager
 from media_bot import MediaBot, build_cli_parser
-from gui_app import MediaBotGUI
+from legacy.gui_app import MediaBotGUI
 from normalizer import ContentNormalizer, ParsedMetadata
 
 

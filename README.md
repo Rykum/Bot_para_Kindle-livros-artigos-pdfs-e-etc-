@@ -156,22 +156,29 @@ O bot extrai automaticamente informações dos títulos:
 python media_bot.py
 ```
 
-## Interface Gráfica
+## Interface Gráfica (Desktop)
 
-Para abrir a interface gráfica demonstrativa:
+A interface oficial agora é uma janela desktop moderna (pywebview):
 
 ```bash
-python gui_app.py
+py -3.13 -m pip install -r requirements.txt
+py -3.13 desktop.py
 ```
 
-A interface mostra:
-- fluxo de processo em etapas
-- busca em todas as fontes disponíveis
-- download de série completa
-- status da coleção
-- biblioteca local
-- limpeza de cache
-- status do grafo graphify
+Abas disponíveis:
+- **Dashboard** — totais da biblioteca (séries, itens, completas, faltantes)
+- **Buscar** — pesquisa em todas as fontes com resultados em cards
+- **Biblioteca** — cards visuais por série com capa, progresso, status e exportação Komga/Kavita
+- **Downloads** — progresso e log em tempo real
+- **Ferramentas** — limpar cache e status do grafo
+
+Para gerar o executável clicável (`dist/MediaBot.exe`):
+
+```bash
+py -3.13 build.py
+```
+
+> A GUI antiga em Tkinter foi preservada em `legacy/gui_app.py`.
 
 ## CLI
 
