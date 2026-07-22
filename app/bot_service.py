@@ -49,34 +49,46 @@ class BotService:
         self._bot: Any = None
         self._cancelled: set[str] = set()
         self._lock = threading.Lock()
+        # True from the moment a sentinel is enqueued until the worker that
+        # will consume it has fully finished (cleared by the worker itself,
+        # under _lock, right before it terminates). This is the single
+        # source of truth that keeps at most one sentinel ever outstanding,
+        # even when stop() is called concurrently from multiple threads or
+        # a job/cleanup outlives a stop() call's join timeout.
+        self._sentinel_pending = False
 
     # --- ciclo de vida ---
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
 
     def stop(self) -> None:
-        thread = self._thread
-        if thread is None or not thread.is_alive():
-            # Nada rodando (double stop, ou stop() antes de start()): não há
-            # worker para consumir uma sentinela, então não a enfileiramos —
-            # caso contrário ela ficaria órfã na fila e o próximo start()
-            # spawnaria um worker que a consome e morre sem processar jobs.
-            self._thread = None
-            return
+        with self._lock:
+            thread = self._thread
+            if thread is None:
+                # Nada rodando (double stop, ou stop() antes de start()): não
+                # há worker para consumir uma sentinela, então não a
+                # enfileiramos — caso contrário ela ficaria órfã na fila e o
+                # próximo start() spawnaria um worker que a consome e morre
+                # sem processar jobs.
+                return
+            if not self._sentinel_pending:
+                self._sentinel_pending = True
+                self._queue.put(_SENTINEL)
+            # else: uma sentinela já está a caminho (posta por outra chamada
+            # concorrente de stop(), ou ainda não consumida por um job/
+            # cleanup demorado) — não enfileiramos uma segunda, apenas
+            # aguardamos abaixo a mesma thread terminar.
 
-        self._queue.put(_SENTINEL)
         thread.join(timeout=5)
-        if thread.is_alive():
-            # O worker não parou a tempo (job/cleanup ainda em andamento).
-            # Mantemos a referência para refletir a realidade: is_alive()
-            # continua True, então um start() futuro não vai subir uma
-            # segunda thread por cima da mesma fila (o que quebraria a
-            # garantia de execução serial). Não bloqueamos além do timeout.
-            return
-        self._thread = None
+        # Se o join expirar, self._thread continua apontando para a thread
+        # ainda viva (ela mesma só se limpa quando termina de verdade — veja
+        # o fim de _run), então um start() futuro não vai subir uma segunda
+        # thread por cima da mesma fila, o que quebraria a garantia de
+        # execução serial. Não bloqueamos além do timeout.
 
     # --- submissão ---
     def submit(self, label: str, fn: Job) -> str:
@@ -137,3 +149,15 @@ class BotService:
         if self._bot is not None and hasattr(self._bot, "cleanup"):
             with contextlib.suppress(Exception):
                 self._bot.cleanup()
+
+        with self._lock:
+            # Bot já foi limpo (ou nunca existiu): descartamos a referência
+            # para que o próximo start()/job crie uma instância nova via
+            # bot_factory, em vez de reutilizar o objeto já encerrado.
+            self._bot = None
+            # A sentinela que nos trouxe até aqui foi consumida e esta thread
+            # está prestes a terminar de verdade — agora sim é seguro que uma
+            # futura stop() enfileire outra sentinela, e que uma futura
+            # start() suba uma nova thread.
+            self._sentinel_pending = False
+            self._thread = None

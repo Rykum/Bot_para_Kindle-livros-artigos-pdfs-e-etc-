@@ -122,3 +122,65 @@ def test_restart_after_stop_processes_jobs():
         assert result == 42
     finally:
         service.stop()
+
+
+def test_double_stop_while_busy_leaves_no_orphan_sentinel():
+    events = []
+    service = make_service(events)
+    service.start()
+    try:
+        service.submit("slow", lambda bot, emit: time.sleep(0.3))
+
+        # Give the worker a moment to actually pick up the job so both stop()
+        # calls below race while it is busy (not while the queue is empty).
+        time.sleep(0.05)
+
+        threads = [threading.Thread(target=service.stop) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+    finally:
+        # Make sure no worker is left running before we restart.
+        service.stop()
+
+    # If an orphan sentinel was left behind, this start() spawns a worker
+    # that immediately consumes it and dies without ever touching the queue
+    # again — the run_sync below would then time out.
+    service.start()
+    try:
+        result = service.run_sync("after-busy-double-stop", lambda bot, emit: 7, timeout=2)
+        assert result == 7
+    finally:
+        service.stop()
+
+
+def test_restart_uses_fresh_bot():
+    events = []
+    instantiations = {"count": 0}
+
+    class TrackedBot:
+        def __init__(self):
+            instantiations["count"] += 1
+            self.cleaned_up = False
+
+        def cleanup(self):
+            self.cleaned_up = True
+
+    service = BotService(bot_factory=TrackedBot, event_sink=lambda name, payload: events.append((name, payload)))
+
+    service.start()
+    try:
+        service.run_sync("job1", lambda bot, emit: None, timeout=2)
+    finally:
+        service.stop()
+
+    service.start()
+    try:
+        bot_state = {}
+        service.run_sync("job2", lambda bot, emit: bot_state.update(cleaned_up=bot.cleaned_up), timeout=2)
+    finally:
+        service.stop()
+
+    assert instantiations["count"] == 2
+    assert bot_state["cleaned_up"] is False
