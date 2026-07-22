@@ -58,9 +58,25 @@ class BotService:
         self._thread.start()
 
     def stop(self) -> None:
+        thread = self._thread
+        if thread is None or not thread.is_alive():
+            # Nada rodando (double stop, ou stop() antes de start()): não há
+            # worker para consumir uma sentinela, então não a enfileiramos —
+            # caso contrário ela ficaria órfã na fila e o próximo start()
+            # spawnaria um worker que a consome e morre sem processar jobs.
+            self._thread = None
+            return
+
         self._queue.put(_SENTINEL)
-        if self._thread:
-            self._thread.join(timeout=5)
+        thread.join(timeout=5)
+        if thread.is_alive():
+            # O worker não parou a tempo (job/cleanup ainda em andamento).
+            # Mantemos a referência para refletir a realidade: is_alive()
+            # continua True, então um start() futuro não vai subir uma
+            # segunda thread por cima da mesma fila (o que quebraria a
+            # garantia de execução serial). Não bloqueamos além do timeout.
+            return
+        self._thread = None
 
     # --- submissão ---
     def submit(self, label: str, fn: Job) -> str:

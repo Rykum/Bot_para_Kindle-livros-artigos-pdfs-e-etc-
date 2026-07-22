@@ -89,3 +89,36 @@ def test_cancel_marks_job():
         assert service.is_cancelled(job_id) is True
     finally:
         service.stop()
+
+
+def test_double_stop_is_safe():
+    events = []
+    service = make_service(events)
+    service.start()
+    service.stop()
+    # Calling stop() again with no worker running must not raise, and must not
+    # leave a stray sentinel behind: a subsequent start() has to process real
+    # jobs, not immediately die on a leftover sentinel from the double stop.
+    service.stop()
+
+    service.start()
+    try:
+        result = service.run_sync("after-double-stop", lambda bot, emit: 1, timeout=2)
+        assert result == 1
+    finally:
+        service.stop()
+
+
+def test_restart_after_stop_processes_jobs():
+    events = []
+    service = make_service(events)
+    # stop() before start() must be a safe no-op — no sentinel should be left
+    # sitting in the queue for the next start() to choke on.
+    service.stop()
+
+    service.start()
+    try:
+        result = service.run_sync("read-again", lambda bot, emit: 42, timeout=2)
+        assert result == 42
+    finally:
+        service.stop()
