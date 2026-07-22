@@ -69,6 +69,40 @@ def test_enrich_caches_result():
         assert len(session.get_calls) == first_calls
 
 
+ANILIST_OK = {
+    "data": {
+        "Media": {
+            "title": {"romaji": "Dandadan", "english": "Dandadan", "native": "ダンダダン"},
+            "status": "RELEASING",
+            "chapters": 120,
+            "volumes": 12,
+            "averageScore": 86,
+            "description": "desc",
+            "coverImage": {"large": "http://img/anilist.jpg"},
+        }
+    }
+}
+
+
+def test_enrich_falls_back_to_anilist():
+    session = FakeSession(
+        get_map={"default": FakeResponse({"data": []})},
+        post_result=FakeResponse(ANILIST_OK),
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        enricher = MetadataEnricher(cache=CacheManager(tmp), session=session)
+        result = enricher.enrich("Dandadan")
+    assert result is not None
+    assert len(session.post_calls) == 1
+    assert result["title"] == "Dandadan"
+    assert result["chapters"] == 120
+    assert result["volumes"] == 12
+    assert result["score"] == 86
+    assert result["status"] == "RELEASING"
+    assert result["synopsis"] == "desc"
+    assert result["cover_image"] == "http://img/anilist.jpg"
+
+
 def test_enrich_returns_none_on_network_error():
     class BrokenSession:
         def get(self, *a, **k):
