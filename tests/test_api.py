@@ -73,3 +73,91 @@ def test_clear_cache_sync():
         assert api.clear_cache() == {"removed": 4}
     finally:
         service.stop()
+
+
+class FakeWindow:
+    def __init__(self):
+        self.calls = []
+
+    def evaluate_js(self, script):
+        self.calls.append(script)
+
+
+def test_emit_event_pushes_to_window():
+    events = []
+    api, service = make_api(events)
+    try:
+        fake_window = FakeWindow()
+        api.set_window(fake_window)
+        api.emit_event("log", {"line": "oi"})
+        assert len(fake_window.calls) == 1
+        call = fake_window.calls[0]
+        assert "window.pushEvent(" in call
+        assert '"log"' in call
+        assert '"oi"' in call
+    finally:
+        service.stop()
+
+
+def test_emit_event_noop_without_window():
+    events = []
+    api, service = make_api(events)
+    try:
+        api.emit_event("log", {"line": "x"})  # não deve levantar exceção
+    finally:
+        service.stop()
+
+
+class CancelableFakeBot:
+    """Bot que expõe should_cancel() para fora via holder, permitindo ao teste
+    disparar cancel_job() enquanto o download 'em andamento' aguarda."""
+
+    def __init__(self, holder, proceed):
+        self._holder = holder
+        self._proceed = proceed
+
+    def download_complete_series(self, series, media_type, source_name,
+                                  progress_callback, should_cancel):
+        self._holder["should_cancel"] = should_cancel
+        self._proceed.wait(timeout=2)
+        self._holder["result"] = should_cancel()
+
+    def cleanup(self):
+        pass
+
+
+def test_download_series_should_cancel_reflects_cancel_job():
+    import threading
+    import time
+
+    events = []
+    holder = {"should_cancel": None, "result": None}
+    proceed = threading.Event()
+    service = BotService(
+        bot_factory=lambda: CancelableFakeBot(holder, proceed),
+        event_sink=lambda n, p: events.append((n, p)),
+    )
+    api = Api(service)
+    service.start()
+    try:
+        ack = api.download_series("X")
+
+        deadline = time.time() + 2
+        while time.time() < deadline and holder["should_cancel"] is None:
+            time.sleep(0.01)
+        assert holder["should_cancel"] is not None
+
+        api.cancel_job(ack["job_id"])
+        proceed.set()
+
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            if holder["result"] is not None or any(
+                n in ("job_done", "job_error") for n, _ in events
+            ):
+                break
+            time.sleep(0.01)
+
+        assert holder["result"] is True
+    finally:
+        service.stop()
