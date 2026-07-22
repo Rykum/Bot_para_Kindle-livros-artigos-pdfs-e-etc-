@@ -22,6 +22,12 @@ class KomgaExporter:
         cleaned = re.sub(r'[<>:"/\\|?*]+', "_", name)
         return cleaned.strip().strip("_.")
 
+    @staticmethod
+    def _label(prefix: str, value: float) -> str:
+        if float(value).is_integer():
+            return f"{prefix} {int(value):03d}"
+        return f"{prefix} {value:05.1f}"  # 10.5 -> "010.5"
+
     def export_series(self, title: str) -> Dict[str, Any]:
         series = self.library.get_or_create_series(title)
         base_path = self.export_root / self.sanitize(series.title)
@@ -36,9 +42,9 @@ class KomgaExporter:
                 continue
 
             if chapter_number is not None:
-                folder = f"Chapter {int(chapter_number):03d}"
+                folder = self._label("Chapter", chapter_number)
             elif volume_number is not None:
-                folder = f"Volume {int(volume_number):03d}"
+                folder = self._label("Volume", volume_number)
             else:
                 folder = "Outros"
 

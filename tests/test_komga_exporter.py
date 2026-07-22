@@ -64,3 +64,21 @@ def test_export_is_idempotent(tmp_path):
 def test_sanitize_removes_invalid_chars(tmp_path):
     exporter = KomgaExporter(library=FakeLibrary([]), export_root=str(tmp_path))
     assert exporter.sanitize('a/b:c*?"<>|') == "a_b_c"
+
+
+def test_fractional_and_integer_chapters_get_distinct_folders(tmp_path):
+    src_int = make_source_file(tmp_path, "cap10.cbz")
+    src_frac = make_source_file(tmp_path, "cap10_5.cbz")
+    library = FakeLibrary([
+        FakeChapter(10.0, [FakeFile(src_int)]),
+        FakeChapter(10.5, [FakeFile(src_frac)]),
+    ])
+    exporter = KomgaExporter(library=library, export_root=str(tmp_path / "out"))
+
+    result = exporter.export_series("Dandadan")
+
+    int_file = Path(result["base_path"]) / "Chapter 010" / "cap10.cbz"
+    frac_file = Path(result["base_path"]) / "Chapter 010.5" / "cap10_5.cbz"
+    assert int_file.exists()
+    assert frac_file.exists()
+    assert result["exported"] == 2
