@@ -10,6 +10,12 @@ sqlalchemy>=2.0.0
 # Barra de progresso para downloads
 tqdm>=4.66.0
 
+# Interface desktop (GUI web local)
+pywebview>=5.0
+
+# Build do executável (somente para gerar o .exe)
+pyinstaller>=6.0
+
 # Utilitários
 pathlib2>=2.3.7; python_version < "3.4"
 

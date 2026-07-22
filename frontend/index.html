@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Media Bot PT-BR</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">📚 Media Bot</div>
+      <nav>
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="search">Buscar</button>
+        <button class="nav-item" data-view="library">Biblioteca</button>
+        <button class="nav-item" data-view="downloads">Downloads</button>
+        <button class="nav-item" data-view="tools">Ferramentas</button>
+      </nav>
+      <div class="sidebar-foot" id="conn-state">Conectando…</div>
+    </aside>
+    <main class="content">
+      <section id="view-dashboard" class="view active"><h1>Dashboard</h1><div id="dash-cards" class="card-grid"></div></section>
+      <section id="view-search" class="view">
+        <h1>Buscar</h1>
+        <div class="form-row">
+          <input id="q" placeholder="Título da série" value="Dandadan" />
+          <select id="media-type"><option>manga</option><option>livro</option><option>hq</option><option>manhwa</option><option>artigo</option></select>
+          <button id="btn-search" class="btn accent">Buscar</button>
+        </div>
+        <div id="search-results" class="card-grid"></div>
+      </section>
+      <section id="view-library" class="view"><h1>Biblioteca</h1><div id="library-cards" class="card-grid"></div></section>
+      <section id="view-downloads" class="view">
+        <h1>Downloads</h1>
+        <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
+        <div id="progress-text" class="muted">Sem download em andamento.</div>
+        <pre id="log" class="log"></pre>
+      </section>
+      <section id="view-tools" class="view">
+        <h1>Ferramentas</h1>
+        <div class="form-row">
+          <button id="btn-cache" class="btn warn">Limpar cache</button>
+          <button id="btn-graph" class="btn">Status do grafo</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
