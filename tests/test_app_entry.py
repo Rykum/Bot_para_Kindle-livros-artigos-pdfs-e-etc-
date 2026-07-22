@@ -1,10 +1,9 @@
-"""Smoke test para o entrypoint app.py (janela pywebview não é verificável em CI).
+"""Smoke test para o entrypoint desktop.py (janela pywebview não é verificável em CI).
 
-O repositório tem um pacote app/ (app/api.py, app/bot_service.py, ...) e este
-projeto também cria um app.py de nível superior como entrypoint da GUI. Isso
-faz `import app` resolver para o pacote, não para o arquivo — por isso o
-arquivo é carregado aqui via importlib.util.spec_from_file_location, usando
-um nome de módulo diferente ("app_entry") para não colidir com o pacote.
+O entrypoint da GUI é desktop.py (nomeado assim para não colidir com o pacote
+app/). O arquivo é carregado aqui via importlib.util.spec_from_file_location
+para exercitar seu código de nível superior (imports e frontend_dir) sem
+disparar a janela pywebview.
 """
 
 from __future__ import annotations
@@ -12,12 +11,12 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-APP_PY = Path(__file__).parent.parent / "app.py"
+DESKTOP_PY = Path(__file__).parent.parent / "desktop.py"
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 
 def _load_app_entry():
-    spec = importlib.util.spec_from_file_location("app_entry", APP_PY)
+    spec = importlib.util.spec_from_file_location("desktop_entry", DESKTOP_PY)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
