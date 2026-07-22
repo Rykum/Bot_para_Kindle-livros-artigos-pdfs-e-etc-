@@ -167,6 +167,20 @@ class LibraryManager:
         """Lista todas as séries na biblioteca."""
         return self.session.query(Series).order_by(Series.title).all()
 
+    def iter_downloaded_files(self, series):
+        """Itera (volume_number, chapter_number, file_path, file_format) dos arquivos baixados."""
+        volumes = self.session.query(Volume).filter(Volume.series_id == series.id).all()
+        for vol in volumes:
+            chapters = self.session.query(Chapter).filter(Chapter.volume_id == vol.id).all()
+            for chap in chapters:
+                files = self.session.query(MediaFile).filter(
+                    MediaFile.chapter_id == chap.id,
+                    MediaFile.download_status == 'completed'
+                ).all()
+                for media_file in files:
+                    yield (vol.volume_number, chap.chapter_number,
+                           media_file.file_path, media_file.file_format)
+
     def cleanup(self):
         """Fecha sessão do banco."""
         self.session.close()
