@@ -10,9 +10,16 @@ Fluxo: Search -> Filter -> DB Check -> Download -> Register
 
 import os
 import time
+import re
+import argparse
+import json
+from collections.abc import Mapping
+import zipfile
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from urllib.parse import urlparse
 
 # Imports dos módulos reais
 from scrapers.mangadex_scraper import MangaDexScraper
@@ -22,6 +29,7 @@ from download_manager import DownloadManager
 from database import db_manager, Series
 from library_manager import LibraryManager
 from normalizer import ContentNormalizer
+from cache_manager import CacheManager
 
 
 class MediaBot:
@@ -36,6 +44,7 @@ class MediaBot:
         # Inicializa componentes
         self.library = LibraryManager()
         self.downloader = DownloadManager(str(self.base_dir))
+        self.cache = CacheManager()
         self.normalizer = ContentNormalizer()
         
         # Inicializa scrapers disponíveis
@@ -47,53 +56,202 @@ class MediaBot:
         
         print(f"✅ Media Bot inicializado. Downloads em: {self.base_dir.absolute()}")
 
+    def _serialize_result(self, result: Any) -> Dict[str, Any]:
+        if is_dataclass(result):
+            return asdict(result)
+        if isinstance(result, dict):
+            return result
+        if isinstance(result, Mapping):
+            return dict(result)
+        return {'value': str(result)}
+
+    def _resolve_scraper(self, source_name: str):
+        normalized = source_name.strip().lower()
+        for scraper in self.scrapers:
+            candidate_names = {
+                scraper.name.lower(),
+                scraper.__class__.__name__.lower(),
+                scraper.base_url.lower(),
+            }
+            if any(normalized == candidate or normalized in candidate for candidate in candidate_names):
+                return scraper
+        return None
+
+    def _formats_for_media_type(self, media_type: str) -> Optional[List[str]]:
+        media_type = (media_type or "").strip().lower()
+        mapping = {
+            'manga': ['cbz', 'cbr'],
+            'manhwa': ['cbz', 'cbr'],
+            'hq': ['cbz', 'cbr'],
+            'comic': ['cbz', 'cbr'],
+            'livro': ['pdf', 'epub'],
+            'book': ['pdf', 'epub'],
+            'artigo': ['pdf'],
+            'article': ['pdf'],
+        }
+        return mapping.get(media_type)
+
+    def _scraper_applicable(self, scraper, media_type: str) -> bool:
+        media_type = (media_type or "").strip().lower()
+        scraper_name = scraper.name.lower()
+
+        if media_type in {"manga", "manhwa", "hq", "comic"}:
+            return scraper_name in {"mangadex", "archive.org"}
+
+        if media_type in {"livro", "book", "artigo", "article"}:
+            return scraper_name in {"archive.org", "project gutenberg"}
+
+        return True
+
+    def _resolve_series_reference(self, scraper, series_title: str, media_type: str) -> str:
+        """Resolve o título digitado para a URL/identificador real da fonte."""
+        candidate = series_title.strip()
+        if candidate.startswith("http://") or candidate.startswith("https://"):
+            return candidate
+
+        search_results = scraper.search(series_title, formats=self._formats_for_media_type(media_type))
+        if search_results:
+            return search_results[0].url
+
+        return candidate
+
+    def _sanitize_filename(self, value: str) -> str:
+        return re.sub(r'[<>:\"/\\|?*]+', '_', value).strip().strip('.')
+
+    def _format_chapter_label(self, chapter_number: float) -> str:
+        try:
+            if float(chapter_number).is_integer():
+                return f"{int(chapter_number):04d}"
+            return str(chapter_number).replace('.', '_')
+        except (TypeError, ValueError):
+            return str(chapter_number).replace('.', '_')
+
+    def _download_mangadex_chapter(self, scraper: MangaDexScraper, chapter_data: Dict[str, Any],
+                                   series_title: str, chapter_num: float,
+                                   progress_callback: Optional[Any] = None) -> Dict[str, Any]:
+        page_urls = chapter_data.get('page_urls') or []
+        if not page_urls:
+            return {
+                'success': False,
+                'error': 'MangaDex chapter has no page URLs',
+            }
+
+        chapter_label = self._format_chapter_label(chapter_num)
+        filename = f"{self._sanitize_filename(series_title)}_cap_{chapter_label}.cbz"
+        output_path = self.base_dir / filename
+
+        try:
+            with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+                for index, page_url in enumerate(page_urls, 1):
+                    response = scraper.session.get(page_url, timeout=60)
+                    response.raise_for_status()
+
+                    suffix = Path(urlparse(page_url).path).suffix or '.jpg'
+                    archive.writestr(f"{index:03d}{suffix}", response.content)
+
+                    if progress_callback:
+                        progress_callback(f"{series_title} cap. {chapter_label}", index, len(page_urls))
+
+            file_hash = self.downloader.calculate_hash(str(output_path))
+            file_size = output_path.stat().st_size
+            return {
+                'success': True,
+                'filepath': str(output_path),
+                'file_path': str(output_path),
+                'size': file_size,
+                'hash': file_hash,
+                'error': None,
+                'retries': 0,
+                'resumed': False,
+                'metadata': {
+                    'format': 'cbz',
+                    'size': file_size,
+                    'sha256': file_hash,
+                }
+            }
+        except Exception as exc:
+            if output_path.exists():
+                try:
+                    output_path.unlink()
+                except Exception:
+                    pass
+            return {
+                'success': False,
+                'error': str(exc),
+            }
+
     def search_series(self, query: str, media_type: str = "manga") -> List[Dict[str, Any]]:
         """
         Busca série em todos os scrapers disponíveis.
         Retorna lista unificada de resultados.
         """
         print(f"\n🔍 Buscando por: '{query}' ({media_type})...")
+        cache_key = f"search::{query.strip().lower()}::{media_type.strip().lower()}"
+        cached_results = self.cache.get(cache_key, max_age_seconds=24 * 3600)
+        if cached_results is not None:
+            print("   💾 Resultado recuperado do cache.")
+            return cached_results
+
         all_results = []
+        formats = self._formats_for_media_type(media_type)
         
         for scraper in self.scrapers:
+            if not self._scraper_applicable(scraper, media_type):
+                continue
+
             try:
-                results = scraper.search(query, media_type)
+                results = scraper.search(query, formats=formats)
                 if results:
                     print(f"   📚 {scraper.name}: {len(results)} resultado(s)")
-                    all_results.extend(results)
+                    all_results.extend(self._serialize_result(result) for result in results)
             except Exception as e:
                 print(f"   ⚠️ Erro no scraper {scraper.name}: {e}")
         
         if not all_results:
             print("   ❌ Nenhum resultado encontrado.")
+
+        self.cache.set(cache_key, all_results)
         
         return all_results
 
-    def get_complete_series_chapters(self, series_title: str, source_name: str = "mangadex") -> List[float]:
+    def get_complete_series_chapters(self, series_title: str, source_name: str = "mangadex", media_type: str = "manga") -> List[float]:
         """
         Consulta a API para obter TODOS os capítulos disponíveis de uma série.
         Retorna lista ordenada de números de capítulos.
         """
         print(f"\n📋 Verificando capítulos disponíveis para '{series_title}'...")
+        cache_key = f"chapters::{series_title.strip().lower()}::{source_name.strip().lower()}"
+        cached_chapters = self.cache.get(cache_key, max_age_seconds=6 * 3600)
+        if cached_chapters is not None:
+            print("   💾 Capítulos recuperados do cache.")
+            return cached_chapters
         
         # Seleciona scraper apropriado
-        scraper = next((s for s in self.scrapers if s.name.lower() == source_name.lower()), None)
+        scraper = self._resolve_scraper(source_name)
         if not scraper:
             print(f"   ⚠️ Scraper '{source_name}' não encontrado.")
             return []
+
+        series_reference = self._resolve_series_reference(scraper, series_title, media_type)
         
         # Busca metadados da série completa
         try:
-            chapters = scraper.get_all_chapters(series_title)
+            chapters = scraper.get_all_chapters(series_reference)
             chapter_numbers = sorted(set(chapters))
-            print(f"   ✅ Encontrados {len(chapter_numbers)} capítulos disponíveis (do {min(chapter_numbers)} ao {max(chapter_numbers)})")
+            if chapter_numbers:
+                print(f"   ✅ Encontrados {len(chapter_numbers)} capítulos disponíveis (do {min(chapter_numbers)} ao {max(chapter_numbers)})")
+            else:
+                print("   ⚠️ Nenhum capítulo foi resolvido para esta fonte.")
+
+            self.cache.set(cache_key, chapter_numbers)
             return chapter_numbers
         except Exception as e:
             print(f"   ❌ Erro ao buscar capítulos: {e}")
             return []
 
     def download_complete_series(self, series_title: str, media_type: str = "manga",
-                                 source_name: str = "mangadex", skip_existing: bool = True):
+                                 source_name: str = "mangadex", skip_existing: bool = True,
+                                 progress_callback: Optional[Any] = None):
         """
         FLUXO PRINCIPAL: Baixa série completa do capítulo 1 ao último.
         1. Busca série
@@ -109,9 +267,15 @@ class MediaBot:
         
         # Passo 1: Registrar/Obter série no DB
         series = self.library.get_or_create_series(series_title, source_name)
+
+        scraper = self._resolve_scraper(source_name)
+        if not scraper:
+            print(f"   ❌ Scraper '{source_name}' não encontrado.")
+            return
         
         # Passo 2: Obter todos os capítulos disponíveis na fonte
-        available_chapters = self.get_complete_series_chapters(series_title, source_name)
+        series_reference = self._resolve_series_reference(scraper, series_title, media_type)
+        available_chapters = self.get_complete_series_chapters(series_reference, source_name, media_type)
         
         if not available_chapters:
             print("   ❌ Nenhum capítulo disponível para download.")
@@ -125,81 +289,93 @@ class MediaBot:
             return
         
         print(f"   📥 Faltam baixar {len(missing_chapters)} de {len(available_chapters)} capítulos.")
-        
-        # Passo 4: Baixar capítulos faltantes
-        downloaded_count = 0
-        failed_count = 0
-        
-        # Re-obtém o scraper para usar no loop
-        scraper = next((s for s in self.scrapers if s.name.lower() == source_name.lower()), None)
-        
-        for chapter_num in missing_chapters:
-            print(f"\n   ⬇️  Baixando Capítulo {chapter_num}...")
+        previous_progress_callback = self.downloader.progress_callback
+        self.downloader.progress_callback = progress_callback
+        try:
+            # Passo 4: Baixar capítulos faltantes
+            downloaded_count = 0
+            failed_count = 0
             
-            try:
-                # Busca URL específica deste capítulo
-                chapter_data = scraper.get_chapter_url(series_title, chapter_num)
+            for chapter_num in missing_chapters:
+                chapter_label = self._format_chapter_label(chapter_num)
+                print(f"\n   ⬇️  Baixando Capítulo {chapter_label}...")
                 
-                if not chapter_data or 'download_url' not in chapter_data:
-                    print(f"      ⚠️ URL não encontrada para cap. {chapter_num}")
+                try:
+                    # Busca URL específica deste capítulo
+                    chapter_data = scraper.get_chapter_url(series_reference, chapter_num)
+                    
+                    if not chapter_data or 'download_url' not in chapter_data:
+                        if chapter_data and chapter_data.get('download_type') == 'mangadex_cbz':
+                            result = self._download_mangadex_chapter(
+                                scraper,
+                                chapter_data,
+                                series_title,
+                                chapter_num,
+                                progress_callback=progress_callback,
+                            )
+                        else:
+                            print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
+                            failed_count += 1
+                            continue
+                    else:
+                        # Executa download real
+                        result = self.downloader.download(
+                            url=chapter_data['download_url'],
+                            filename=f"{self._sanitize_filename(series_title)}_cap_{chapter_label}.{chapter_data.get('format', 'cbz')}",
+                            metadata={
+                                'series': series_title,
+                                'chapter': chapter_num,
+                                'source': source_name
+                            }
+                        )
+                    
+                    if result['success']:
+                        # Registra no DB
+                        chap_record = self.library.add_chapter(
+                            series=series,
+                            volume_num=chapter_data.get('volume', 1),
+                            chapter_num=chapter_num,
+                            title=chapter_data.get('title', f"Capítulo {chapter_label}")
+                        )
+                        
+                        metadata = result.get('metadata', {})
+                        self.library.register_download(
+                            chapter=chap_record,
+                            file_path=result.get('file_path') or result.get('filepath'),
+                            file_format=metadata.get('format', 'unknown'),
+                            file_size=metadata.get('size', 0),
+                            sha256_hash=metadata.get('sha256', '')
+                        )
+                        
+                        downloaded_count += 1
+                        print(f"      ✅ Sucesso! ({metadata.get('size', 0) / 1024 / 1024:.2f} MB)")
+                    else:
+                        failed_count += 1
+                        print(f"      ❌ Falha no download: {result.get('error', 'Erro desconhecido')}")
+                        
+                except Exception as e:
                     failed_count += 1
-                    continue
+                    print(f"      ❌ Erro inesperado: {e}")
                 
-                # Executa download real
-                result = self.downloader.download(
-                    url=chapter_data['download_url'],
-                    filename=f"{series_title}_cap_{chapter_num:04d}.{chapter_data.get('format', 'cbz')}",
-                    metadata={
-                        'series': series_title,
-                        'chapter': chapter_num,
-                        'source': source_name
-                    }
-                )
-                
-                if result['success']:
-                    # Registra no DB
-                    chap_record = self.library.add_chapter(
-                        series=series,
-                        volume_num=chapter_data.get('volume', 1),
-                        chapter_num=chapter_num,
-                        title=chapter_data.get('title', f"Capítulo {chapter_num}")
-                    )
-                    
-                    self.library.register_download(
-                        chapter=chap_record,
-                        file_path=result['file_path'],
-                        file_format=result['metadata'].get('format', 'unknown'),
-                        file_size=result['metadata'].get('size', 0),
-                        sha256_hash=result['metadata'].get('sha256', '')
-                    )
-                    
-                    downloaded_count += 1
-                    print(f"      ✅ Sucesso! ({result['metadata'].get('size', 0) / 1024 / 1024:.2f} MB)")
-                else:
-                    failed_count += 1
-                    print(f"      ❌ Falha no download: {result.get('error', 'Erro desconhecido')}")
-                    
-            except Exception as e:
-                failed_count += 1
-                print(f"      ❌ Erro inesperado: {e}")
+                # Rate limiting entre capítulos
+                time.sleep(2)
             
-            # Rate limiting entre capítulos
-            time.sleep(2)
-        
-        # Resumo final
-        print(f"\n{'='*60}")
-        print(f"📊 RESUMO DO DOWNLOAD")
-        print(f"{'='*60}")
-        print(f"   Total faltante: {len(missing_chapters)}")
-        print(f"   Baixados com sucesso: {downloaded_count}")
-        print(f"   Falhas: {failed_count}")
-        
-        # Mostra progresso atualizado
-        progress = self.library.get_series_progress(series)
-        print(f"   Progresso total: {progress['completion_percentage']:.1f}%")
-        
-        if progress['is_complete']:
-            print(f"\n🎉 PARABÉNS! Série '{series_title}' COMPLETA!")
+            # Resumo final
+            print(f"\n{'='*60}")
+            print(f"📊 RESUMO DO DOWNLOAD")
+            print(f"{'='*60}")
+            print(f"   Total faltante: {len(missing_chapters)}")
+            print(f"   Baixados com sucesso: {downloaded_count}")
+            print(f"   Falhas: {failed_count}")
+            
+            # Mostra progresso atualizado
+            progress = self.library.get_series_progress(series)
+            print(f"   Progresso total: {progress['completion_percentage']:.1f}%")
+            
+            if progress['is_complete']:
+                print(f"\n🎉 PARABÉNS! Série '{series_title}' COMPLETA!")
+        finally:
+            self.downloader.progress_callback = previous_progress_callback
 
     def check_collection_status(self, series_title: str):
         """Exibe status detalhado de uma coleção."""
@@ -243,15 +419,113 @@ class MediaBot:
         self.library.cleanup()
         db_manager.close()
 
+    def clear_cache(self) -> int:
+        """Remove cache local de consultas e capítulos."""
+        return self.cache.clear()
+
+    def print_graph_status(self):
+        """Mostra um resumo simples do grafo gerado pelo graphify, se existir."""
+        graph_dir = Path(__file__).parent / "graphify-out"
+        graph_path = graph_dir / "graph.json"
+        report_path = graph_dir / "GRAPH_REPORT.md"
+
+        print(f"\n{'='*60}")
+        print("🕸️ STATUS DO GRAFO")
+        print(f"{'='*60}")
+
+        if not graph_path.exists():
+            print("   Nenhum graph.json encontrado em graphify-out/.")
+            return
+
+        try:
+            graph_data = json.loads(graph_path.read_text(encoding='utf-8'))
+            nodes = graph_data.get('nodes', [])
+            edges = graph_data.get('edges', [])
+            communities = graph_data.get('communities', [])
+
+            print(f"   Nós: {len(nodes)}")
+            print(f"   Arestas: {len(edges)}")
+            print(f"   Comunidades: {len(communities)}")
+            print(f"   Relatório: {report_path}")
+        except Exception as exc:
+            print(f"   Falha ao ler graph.json: {exc}")
+
+
+def build_cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Media Bot PT-BR - pesquisa, download e organização de mídia"
+    )
+    subparsers = parser.add_subparsers(dest="command", required=False)
+
+    search_parser = subparsers.add_parser("search", help="Buscar séries em todas as fontes")
+    search_parser.add_argument("query", help="Título ou termo de busca")
+    search_parser.add_argument("--media-type", default="manga", help="Tipo de mídia: manga, livro, hq, manhwa, artigo")
+
+    download_parser = subparsers.add_parser("download", help="Baixar uma série completa")
+    download_parser.add_argument("series", help="Nome da série")
+    download_parser.add_argument("--media-type", default="manga", help="Tipo de mídia")
+    download_parser.add_argument("--source", default="mangadex", help="Fonte: mangadex, archive, gutenberg")
+
+    status_parser = subparsers.add_parser("status", help="Ver status de uma coleção")
+    status_parser.add_argument("series", help="Nome da série")
+
+    library_parser = subparsers.add_parser("library", help="Listar biblioteca local")
+
+    cache_clear_parser = subparsers.add_parser("cache-clear", help="Limpar cache local")
+
+    subparsers.add_parser("graph-status", help="Mostrar resumo do grafo graphify")
+
+    return parser
+
+
+def run_cli() -> int:
+    parser = build_cli_parser()
+    args = parser.parse_args()
+
+    bot = MediaBot()
+    try:
+        if args.command == "search":
+            results = bot.search_series(args.query, media_type=args.media_type)
+            if not results:
+                return 0
+
+            print(f"\nResultados: {len(results)}")
+            for index, result in enumerate(results, 1):
+                title = result.get('title') or result.get('series_name') or 'Sem título'
+                source = result.get('source', 'unknown')
+                format_type = result.get('format_type') or result.get('format') or 'unknown'
+                url = result.get('url') or result.get('download_url') or '-'
+                print(f"{index:02d}. {title} [{source}] ({format_type})")
+                print(f"    {url}")
+            return 0
+
+        if args.command == "download":
+            bot.download_complete_series(args.series, media_type=args.media_type, source_name=args.source)
+            return 0
+
+        if args.command == "status":
+            bot.check_collection_status(args.series)
+            return 0
+
+        if args.command == "library":
+            bot.list_library()
+            return 0
+
+        if args.command == "cache-clear":
+            removed = bot.clear_cache()
+            print(f"Cache removido: {removed} arquivo(s)")
+            return 0
+
+        if args.command == "graph-status":
+            bot.print_graph_status()
+            return 0
+
+        parser.print_help()
+        return 0
+    finally:
+        bot.cleanup()
+
 
 # Exemplo de uso direto
 if __name__ == "__main__":
-    bot = MediaBot()
-    
-    # Exemplo: Buscar e baixar Dandadan completo
-    # bot.download_complete_series("Dandadan", media_type="manga", source_name="mangadex")
-    
-    # Exemplo: Ver status da biblioteca
-    bot.list_library()
-    
-    bot.cleanup()
+    raise SystemExit(run_cli())

@@ -74,7 +74,8 @@ class DownloadManager:
         destination_dir: str = None,
         expected_hash: str = None,
         resume: bool = True,
-        progress_bar: bool = True
+        progress_bar: bool = True,
+        metadata: Dict = None
     ) -> Dict:
         """
         Faz download de um arquivo com todas as funcionalidades
@@ -102,11 +103,13 @@ class DownloadManager:
         result = {
             'success': False,
             'filepath': None,
+            'file_path': None,
             'size': 0,
             'hash': None,
             'error': None,
             'retries': 0,
-            'resumed': False
+            'resumed': False,
+            'metadata': metadata.copy() if isinstance(metadata, dict) else {}
         }
         
         # Determinar caminho completo
@@ -119,8 +122,14 @@ class DownloadManager:
             logger.info(f"Arquivo já existe: {filepath}")
             result['success'] = True
             result['filepath'] = str(filepath)
+            result['file_path'] = str(filepath)
             result['size'] = filepath.stat().st_size
             result['hash'] = self.calculate_hash(str(filepath))
+            result['metadata'] = {
+                'format': filepath.suffix.lstrip('.').lower(),
+                'size': result['size'],
+                'sha256': result['hash'],
+            }
             return result
         
         # Tentar download com retry
@@ -192,15 +201,23 @@ class DownloadManager:
                 # Verificar hash se fornecido
                 file_hash = self.calculate_hash(str(filepath))
                 result['hash'] = file_hash
+                file_format = filepath.suffix.lstrip('.').lower()
+                result['metadata'] = {
+                    'format': file_format,
+                    'size': downloaded,
+                    'sha256': file_hash,
+                }
                 
                 if expected_hash and file_hash != expected_hash:
                     logger.warning(f"Hash mismatch! Expected: {expected_hash}, Got: {file_hash}")
-                    result['error'] = f"Hash verification failed"
-                    # Não considerar como erro fatal, apenas warning
+                    result['error'] = "Hash verification failed"
+                    result['success'] = False
+                    return result
                 
                 # Sucesso
                 result['success'] = True
                 result['filepath'] = str(filepath)
+                result['file_path'] = str(filepath)
                 result['size'] = downloaded
                 
                 logger.info(f"Download concluído: {filepath} ({downloaded / 1024 / 1024:.2f} MB)")

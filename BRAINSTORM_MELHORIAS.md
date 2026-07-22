@@ -4,6 +4,77 @@
 
 ---
 
+## 🔎 COMPARATIVO REAL DO CÓDIGO ATUAL
+
+### O que já existe e é funcional
+- Busca modular com scrapers separados em [scrapers/](scrapers)
+- Rate limiting por domínio na [base dos scrapers](scrapers/base_scraper.py)
+- Persistência relacional em SQLite via [database.py](database.py)
+- Normalização de metadados em [normalizer.py](normalizer.py)
+- Download com retry, resume e hash em [download_manager.py](download_manager.py)
+
+### O que a documentação prometia, mas o código ainda não entregava bem
+- Fluxo de download completo com chamadas incompatíveis entre [media_bot.py](media_bot.py) e os scrapers
+- Parâmetros de busca passados no formato errado para alguns scrapers
+- Saída do downloader sem compatibilidade total com o orquestrador
+- Capacidade de baixar séries em manga fica limitada quando a fonte não oferece URL direta de arquivo
+
+### O que vale copiar dos projetos populares e funcionais
+- Registro de fontes com descoberta e fallback por capacidades
+- Cache simples de resultados de busca e metadados
+- CLI com comandos pequenos e previsíveis
+- Saída clara sobre o que é baixável e o que é só indexável
+- Separação entre fonte de metadados e fonte de download
+
+### O que já foi aplicado neste projeto
+- Orquestrador agora resolve scrapers por nome/camada de fonte com mais tolerância
+- Busca passou a receber formatos coerentes com o tipo de mídia
+- DownloadManager agora devolve chaves compatíveis com o fluxo do bot
+- Scrapers de Archive e Gutenberg passaram a expor download direto e lista mínima de itens
+- Cache local passou a evitar buscas repetidas e reduzir chamadas desnecessárias
+
+---
+
+## 🧠 BRAINSTORM PÓS-GRAPHIFY
+
+### Leitura do grafo
+- O projeto já está centrado em [MediaBot](media_bot.py), [BaseScraper](scrapers/base_scraper.py), [LibraryManager](library_manager.py), [MangaDexScraper](scrapers/mangadex_scraper.py), [Series](database.py) e [ContentNormalizer](normalizer.py).
+- As comunidades mostram módulos bem separados, mas com pouca coesão interna no bloco de infraestrutura e nas fontes alternativas.
+- As conexões mais interessantes são as pontes entre orquestração, persistência e scraping; é aí que o projeto ganha ou quebra.
+
+### O que é popular e funcional no padrão desse tipo de produto
+- Separar claramente indexação, resolução de capítulos e download final.
+- Tratar MangaDex como fonte de leitura e arquivo local como fonte de verdade da biblioteca.
+- Ter cache simples para evitar repetir pesquisa e feed.
+- Expor CLI pequena com comandos previsíveis antes de tentar web UI.
+- Registrar progresso por série com estado resumido, não só listas soltas.
+
+### Melhorias com maior retorno agora
+1. **CLI mínima e séria**: `search`, `download`, `status`, `library`, `cache-clear`, `graph-status`.
+2. **Testes de contrato**: garantir que cada scraper retorna `search`, `get_series_info`, `get_all_chapters` e `get_chapter_url` no mesmo formato.
+3. **Normalização de fonte**: abstrair a diferença entre `download_url`, `page_urls` e `downloadable_files` para uma camada única.
+4. **Exportação de biblioteca**: gerar manifest compatível com Komga/Kavita antes de pensar em interface web.
+5. **Observabilidade**: logs estruturados e métricas simples de sucesso/falha por fonte.
+
+### O que ainda falta para ficar "de produto"
+- Um fluxo confiável para fontes além de MangaDex.
+- Um formato de saída único para arquivos baixados.
+- Um conjunto pequeno de testes que proteja o contrato entre módulos.
+- Uma interface de uso que não dependa de editar código.
+
+### Prioridade sugerida
+- Curto prazo: CLI + testes de contrato + exportação.
+- Médio prazo: monitoramento de novos capítulos + notificações.
+- Longo prazo: UI web, plugins de novas fontes e ranking de qualidade.
+
+### Nova camada aplicada: interface gráfica
+- A GUI agora demonstra o pipeline real do bot em uma janela única, com log, tabela de resultados e ações de biblioteca/cache.
+- Ela melhora a experiência de descoberta para usuário não técnico sem destruir a simplicidade da CLI.
+- O próximo passo natural depois da GUI é separar o feedback visual por etapas do fluxo, exportar relatórios e, só então, pensar em web UI.
+
+
+---
+
 ## 🎯 MELHORIAS CRÍTICAS (Implementar Imediatamente)
 
 ### 1. Corrigir Loop Infinito de Pesquisa

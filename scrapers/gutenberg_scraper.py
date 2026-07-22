@@ -189,6 +189,14 @@ class ProjectGutenbergScraper(BaseScraper):
                 'chapter': metadata_parsed.get('chapter'),
                 'available_formats': available_formats,
                 'download_url': download_url,
+                'format': available_formats[0] if available_formats else 'unknown',
+                'available_chapters': [{
+                    'chapter': metadata_parsed.get('chapter') or 1,
+                    'volume': metadata_parsed.get('volume') or 1,
+                    'title': title,
+                    'download_url': download_url,
+                    'format': available_formats[0] if available_formats else 'unknown',
+                }] if download_url else [],
                 'url': series_url
             }
             

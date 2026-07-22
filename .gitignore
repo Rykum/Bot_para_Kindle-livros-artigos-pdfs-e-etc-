@@ -1,6 +1,10 @@
-```
 # Database file
 media_bot.db
+
+# Runtime output (gerado pelo bot)
+cache/
+downloads/
+graphify-out/
 
 # Environment variables
 .env
@@ -35,4 +39,3 @@ requirements.txt.bak
 .Trashes
 ehthumbs.db
 Thumbs.db
-```

@@ -51,7 +51,6 @@ class MangaDexScraper(BaseScraper):
             search_url = f"{self.base_url}/manga"
             params = {
                 'title': query,
-                'translatedLanguage[]': ['pt-br'],  # Apenas português brasileiro
                 'includes[]': ['cover_art'],  # Incluir arte da capa
                 'limit': 20,
                 'offset': 0
@@ -239,3 +238,45 @@ class MangaDexScraper(BaseScraper):
             page_urls.append(page_url)
         
         return page_urls
+
+    def get_chapter_url(self, series_identifier: str, chapter_number: float) -> Optional[Dict]:
+        """Resolves a chapter into page URLs that can be packed into a CBZ."""
+        series_info = self.get_series_info(series_identifier)
+        if not series_info:
+            return None
+
+        matched_chapter = None
+        for item in series_info.get('available_chapters', []):
+            try:
+                item_chapter = item.get('chapter')
+                if item_chapter is not None and float(item_chapter) == float(chapter_number):
+                    matched_chapter = item
+                    break
+            except (TypeError, ValueError):
+                continue
+
+        if not matched_chapter:
+            return None
+
+        chapter_id = matched_chapter.get('chapter_id')
+        if not chapter_id:
+            return None
+
+        chapter_info = self.get_chapter_download_url(chapter_id)
+        if not chapter_info:
+            return None
+
+        page_urls = self.build_page_urls(chapter_info)
+        if not page_urls:
+            return None
+
+        return {
+            'chapter_id': chapter_id,
+            'title': matched_chapter.get('title') or f'Capítulo {chapter_number}',
+            'volume': matched_chapter.get('volume') or 1,
+            'chapter': float(chapter_number),
+            'format': 'cbz',
+            'download_type': 'mangadex_cbz',
+            'page_urls': page_urls,
+            'page_count': len(page_urls),
+        }

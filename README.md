@@ -156,6 +156,47 @@ O bot extrai automaticamente informações dos títulos:
 python media_bot.py
 ```
 
+## Interface Gráfica
+
+Para abrir a interface gráfica demonstrativa:
+
+```bash
+python gui_app.py
+```
+
+A interface mostra:
+- fluxo de processo em etapas
+- busca em todas as fontes disponíveis
+- download de série completa
+- status da coleção
+- biblioteca local
+- limpeza de cache
+- status do grafo graphify
+
+## CLI
+
+O bot agora possui uma interface de linha de comando simples:
+
+```bash
+# Buscar uma série em todas as fontes
+python media_bot.py search "Dandadan" --media-type manga
+
+# Baixar uma série completa
+python media_bot.py download "Dandadan" --media-type manga --source mangadex
+
+# Ver status de uma coleção
+python media_bot.py status "Dandadan"
+
+# Listar biblioteca local
+python media_bot.py library
+
+# Limpar cache local
+python media_bot.py cache-clear
+
+# Ver resumo do grafo gerado pelo graphify
+python media_bot.py graph-status
+```
+
 ## Logs
 
 Os logs são salvos em `media_bot.log` e também exibidos no console.

@@ -190,6 +190,15 @@ class ArchiveOrgScraper(BaseScraper):
                 'volume': metadata_parsed.get('volume'),
                 'chapter': metadata_parsed.get('chapter'),
                 'total_files': len(downloadable_files),
+                'download_url': downloadable_files[0]['url'] if downloadable_files else None,
+                'format': downloadable_files[0]['format'] if downloadable_files else 'unknown',
+                'available_chapters': [{
+                    'chapter': metadata_parsed.get('chapter') or 1,
+                    'volume': metadata_parsed.get('volume') or 1,
+                    'title': title,
+                    'download_url': downloadable_files[0]['url'] if downloadable_files else None,
+                    'format': downloadable_files[0]['format'] if downloadable_files else 'unknown',
+                }] if downloadable_files else [],
                 'downloadable_files': downloadable_files,
                 'url': series_url
             }

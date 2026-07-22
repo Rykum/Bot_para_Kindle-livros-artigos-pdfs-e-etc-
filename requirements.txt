@@ -4,6 +4,9 @@
 # Requisições HTTP
 requests>=2.31.0
 
+# Banco de dados relacional
+sqlalchemy>=2.0.0
+
 # Barra de progresso para downloads
 tqdm>=4.66.0
 

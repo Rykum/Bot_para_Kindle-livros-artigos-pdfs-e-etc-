@@ -204,6 +204,93 @@ class BaseScraper(ABC):
         except Exception as e:
             logger.debug(f"Não foi possível obter tamanho do arquivo: {e}")
         return None
+
+    def get_all_chapters(self, series_identifier: str) -> List[float]:
+        """Retorna a lista normalizada de capítulos disponíveis para uma série."""
+        series_info = self.get_series_info(series_identifier)
+        if not series_info:
+            return []
+
+        chapter_numbers: List[float] = []
+        available_chapters = series_info.get('available_chapters') or series_info.get('chapters') or []
+
+        for item in available_chapters:
+            if isinstance(item, (int, float)):
+                chapter_numbers.append(float(item))
+                continue
+
+            if not isinstance(item, dict):
+                continue
+
+            chapter_value = item.get('chapter')
+            if chapter_value is None:
+                chapter_value = item.get('number')
+
+            if chapter_value is None:
+                continue
+
+            try:
+                chapter_numbers.append(float(chapter_value))
+            except (TypeError, ValueError):
+                continue
+
+        if chapter_numbers:
+            return sorted(set(chapter_numbers))
+
+        total_chapters = series_info.get('total_chapters')
+        if isinstance(total_chapters, int) and total_chapters > 0:
+            return [float(number) for number in range(1, total_chapters + 1)]
+
+        return []
+
+    def get_chapter_url(self, series_identifier: str, chapter_number: float) -> Optional[Dict[str, Any]]:
+        """Tenta resolver a URL de download direta de um capítulo ou item."""
+        series_info = self.get_series_info(series_identifier)
+        if not series_info:
+            return None
+
+        available_chapters = series_info.get('available_chapters') or []
+        for item in available_chapters:
+            if not isinstance(item, dict):
+                continue
+
+            candidate = item.get('chapter')
+            if candidate is None:
+                candidate = item.get('number')
+
+            try:
+                if candidate is not None and float(candidate) == float(chapter_number):
+                    download_url = item.get('download_url') or item.get('url')
+                    if download_url:
+                        payload = dict(item)
+                        payload['download_url'] = download_url
+                        payload['format'] = payload.get('format') or payload.get('format_type') or series_info.get('format') or 'unknown'
+                        return payload
+            except (TypeError, ValueError):
+                continue
+
+        download_url = series_info.get('download_url')
+        if download_url:
+            return {
+                'download_url': download_url,
+                'format': series_info.get('format') or series_info.get('format_type') or 'unknown',
+                'volume': series_info.get('volume'),
+                'chapter': chapter_number,
+                'title': series_info.get('title'),
+            }
+
+        downloadable_files = series_info.get('downloadable_files') or []
+        if downloadable_files:
+            first_file = downloadable_files[0]
+            return {
+                'download_url': first_file.get('url'),
+                'format': first_file.get('format', 'unknown'),
+                'volume': series_info.get('volume'),
+                'chapter': chapter_number,
+                'title': first_file.get('name') or series_info.get('title'),
+            }
+
+        return None
     
     def to_dict(self) -> Dict:
         """Serializa scraper para dict"""
