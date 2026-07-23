@@ -112,6 +112,30 @@ class Api:
         new = self._service.run_sync("set-dir", lambda bot, emit: bot.set_download_dir(path), quiet=True)
         return {"path": new}
 
+    def _open_in_explorer(self, path) -> bool:
+        import os
+        import sys
+        import subprocess
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(path))  # noqa: S606
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+            return True
+        except Exception:
+            return False
+
+    def open_download_dir(self) -> Dict[str, Any]:
+        from pathlib import Path
+        path = self._service.run_sync("get-dir", lambda bot, emit: str(bot.base_dir), quiet=True)
+        Path(path).mkdir(parents=True, exist_ok=True)
+        return {"ok": self._open_in_explorer(path)}
+
+    def open_path(self, path: str) -> Dict[str, Any]:
+        return {"ok": self._open_in_explorer(path)}
+
     def choose_download_dir(self) -> Dict[str, Any]:
         """Abre o seletor de pasta nativo e aplica a escolha (persistida)."""
         if self._window is None:

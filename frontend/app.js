@@ -330,7 +330,8 @@ async function loadLibrary() {
     });
     exportBtn.addEventListener("click", async () => {
       const r = await api().export_komga(s.title);
-      alert(`Exportado para:\n${r.base_path}\nArquivos: ${r.exported} (pulados: ${r.skipped})`);
+      const msg = `Exportado para:\n${r.base_path}\n\n${r.exported} novo(s), ${r.skipped} já existente(s).\n\nAbrir a pasta?`;
+      if (confirm(msg)) api().open_path(r.base_path);
     });
     // Enriquecimento assíncrono da capa (não bloqueia o render)
     api().enrich_metadata(s.title).then((meta) => {
@@ -380,6 +381,7 @@ document.getElementById("btn-choose-dir").addEventListener("click", async () => 
     document.getElementById("download-dir").textContent = r.path;
   }
 });
+document.getElementById("btn-open-dir").addEventListener("click", () => api().open_download_dir());
 
 // #6 Reconhecer em vez de lembrar: persistir idioma/fonte/tipo
 function persistPrefs() {
