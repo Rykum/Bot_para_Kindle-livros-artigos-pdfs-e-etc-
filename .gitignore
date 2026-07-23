@@ -46,3 +46,6 @@ ehthumbs.db
 Thumbs.db
 # Configurações do usuário
 media_bot_settings.json
+
+# Saída de exportação (Komga/Kavita)
+exports/
