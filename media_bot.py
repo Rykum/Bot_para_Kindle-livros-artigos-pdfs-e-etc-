@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from urllib.parse import urlparse
+from sqlalchemy.exc import IntegrityError
 
 # Imports dos módulos reais
 from scrapers.mangadex_scraper import MangaDexScraper
@@ -217,7 +218,8 @@ class MediaBot:
         
         return all_results
 
-    def get_complete_series_chapters(self, series_title: str, source_name: str = "mangadex", media_type: str = "manga") -> List[float]:
+    def get_complete_series_chapters(self, series_title: str, source_name: str = "mangadex", media_type: str = "manga",
+                                     language: str = "pt-br") -> List[float]:
         """
         Consulta a API para obter TODOS os capítulos disponíveis de uma série.
         Retorna lista ordenada de números de capítulos.
@@ -228,7 +230,7 @@ class MediaBot:
         if cached_chapters is not None:
             print("   💾 Capítulos recuperados do cache.")
             return cached_chapters
-        
+
         # Seleciona scraper apropriado
         scraper = self._resolve_scraper(source_name)
         if not scraper:
@@ -236,10 +238,10 @@ class MediaBot:
             return []
 
         series_reference = self._resolve_series_reference(scraper, series_title, media_type)
-        
+
         # Busca metadados da série completa
         try:
-            chapters = scraper.get_all_chapters(series_reference)
+            chapters = scraper.get_all_chapters(series_reference, language=language)
             chapter_numbers = sorted(set(chapters))
             if chapter_numbers:
                 print(f"   ✅ Encontrados {len(chapter_numbers)} capítulos disponíveis (do {min(chapter_numbers)} ao {max(chapter_numbers)})")
@@ -252,23 +254,103 @@ class MediaBot:
             print(f"   ❌ Erro ao buscar capítulos: {e}")
             return []
 
+    def _attempt_chapter(self, scraper, series, series_reference: str, series_title: str,
+                         chapter_num: float, source_name: str, language: str,
+                         progress_callback: Optional[Any], should_cancel: Optional[Any]) -> bool:
+        """Tenta baixar e registrar um único capítulo. Retorna True em caso de sucesso."""
+        chapter_label = self._format_chapter_label(chapter_num)
+        print(f"\n   ⬇️  Baixando Capítulo {chapter_label} ({language})...")
+
+        try:
+            # Busca URL específica deste capítulo
+            chapter_data = scraper.get_chapter_url(series_reference, chapter_num, language=language)
+
+            if not chapter_data or 'download_url' not in chapter_data:
+                if chapter_data and chapter_data.get('download_type') == 'mangadex_cbz':
+                    result = self._download_mangadex_chapter(
+                        scraper,
+                        chapter_data,
+                        series_title,
+                        chapter_num,
+                        progress_callback=progress_callback,
+                        should_cancel=should_cancel,
+                    )
+                else:
+                    print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
+                    return False
+            else:
+                # Executa download real
+                result = self.downloader.download(
+                    url=chapter_data['download_url'],
+                    filename=f"{self._sanitize_filename(series_title)}_cap_{chapter_label}.{chapter_data.get('format', 'cbz')}",
+                    metadata={
+                        'series': series_title,
+                        'chapter': chapter_num,
+                        'source': source_name
+                    }
+                )
+
+            if result['success']:
+                metadata = result.get('metadata', {})
+                try:
+                    # Registra no DB
+                    chap_record = self.library.add_chapter(
+                        series=series,
+                        volume_num=chapter_data.get('volume', 1),
+                        chapter_num=chapter_num,
+                        title=chapter_data.get('title', f"Capítulo {chapter_label}")
+                    )
+
+                    self.library.register_download(
+                        chapter=chap_record,
+                        file_path=result.get('file_path') or result.get('filepath'),
+                        file_format=metadata.get('format', 'unknown'),
+                        file_size=metadata.get('size', 0),
+                        sha256_hash=metadata.get('sha256', '')
+                    )
+                except IntegrityError:
+                    # Conteúdo (hash) já registrado na biblioteca (deduplicação) -
+                    # trata como concluído em vez de falha a ser re-tentada.
+                    self.library.session.rollback()
+                    print(f"      ♻️  Conteúdo já registrado (hash duplicado); considerado concluído.")
+                    return True
+
+                print(f"      ✅ Sucesso! ({metadata.get('size', 0) / 1024 / 1024:.2f} MB)")
+                return True
+            else:
+                print(f"      ❌ Falha no download: {result.get('error', 'Erro desconhecido')}")
+                return False
+
+        except Exception as e:
+            print(f"      ❌ Erro inesperado: {e}")
+            try:
+                # Garante que a sessão volte a um estado utilizável após uma
+                # falha de commit (ex.: IntegrityError), para não travar
+                # as rodadas de re-tentativa seguintes.
+                self.library.session.rollback()
+            except Exception:
+                pass
+            return False
+
     def download_complete_series(self, series_title: str, media_type: str = "manga",
                                  source_name: str = "mangadex", skip_existing: bool = True,
                                  progress_callback: Optional[Any] = None,
-                                 should_cancel: Optional[Any] = None):
+                                 should_cancel: Optional[Any] = None,
+                                 chapters: Optional[List[float]] = None,
+                                 language: str = "pt-br", fallback_language: Optional[str] = None):
         """
         FLUXO PRINCIPAL: Baixa série completa do capítulo 1 ao último.
         1. Busca série
         2. Registra no DB
         3. Lista capítulos disponíveis online
         4. Identifica faltantes locais
-        5. Baixa apenas faltantes
+        5. Baixa apenas faltantes (com re-tentativas e fallback de idioma)
         6. Atualiza DB
         """
         print(f"\n{'='*60}")
         print(f"🚀 INICIANDO DOWNLOAD DA SÉRIE: {series_title}")
         print(f"{'='*60}")
-        
+
         # Passo 1: Registrar/Obter série no DB
         series = self.library.get_or_create_series(series_title, source_name)
 
@@ -283,9 +365,10 @@ class MediaBot:
                 'failed_chapters': [],
             }
 
-        # Passo 2: Obter todos os capítulos disponíveis na fonte
+        # Passo 2: Obter todos os capítulos disponíveis na fonte (idioma primário)
         series_reference = self._resolve_series_reference(scraper, series_title, media_type)
-        available_chapters = self.get_complete_series_chapters(series_reference, source_name, media_type)
+        available_chapters = self.get_complete_series_chapters(series_reference, source_name, media_type,
+                                                                language=language)
 
         if not available_chapters:
             print("   ❌ Nenhum capítulo disponível para download.")
@@ -297,8 +380,12 @@ class MediaBot:
                 'failed_chapters': [],
             }
 
-        # Passo 3: Identificar o que já temos baixado
-        missing_chapters = self.library.find_missing_chapters(series, available_chapters)
+        # Passo 3: Identificar o que já temos baixado / o que foi selecionado
+        if chapters:
+            requested = sorted(set(float(c) for c in chapters) & set(available_chapters))
+            missing_chapters = self.library.find_missing_chapters(series, requested) if skip_existing else requested
+        else:
+            missing_chapters = self.library.find_missing_chapters(series, available_chapters)
 
         if not missing_chapters:
             print(f"   🎉 Série completa! Todos os {len(available_chapters)} capítulos já estão baixados.")
@@ -314,99 +401,51 @@ class MediaBot:
         previous_progress_callback = self.downloader.progress_callback
         self.downloader.progress_callback = progress_callback
         try:
-            # Passo 4: Baixar capítulos faltantes
+            # Passo 4: Baixar capítulos faltantes, com até 3 rodadas (1 principal + 2 re-tentativas)
             downloaded_count = 0
-            failed_count = 0
             cancelled = False
-            failed_chapters = []
 
-            for chapter_num in missing_chapters:
-                if should_cancel is not None and should_cancel():
-                    print("   ⏹️  Download cancelado pelo usuário.")
-                    cancelled = True
-                    break
-                chapter_label = self._format_chapter_label(chapter_num)
-                print(f"\n   ⬇️  Baixando Capítulo {chapter_label}...")
-                
-                try:
-                    # Busca URL específica deste capítulo
-                    chapter_data = scraper.get_chapter_url(series_reference, chapter_num)
-                    
-                    if not chapter_data or 'download_url' not in chapter_data:
-                        if chapter_data and chapter_data.get('download_type') == 'mangadex_cbz':
-                            result = self._download_mangadex_chapter(
-                                scraper,
-                                chapter_data,
-                                series_title,
-                                chapter_num,
-                                progress_callback=progress_callback,
-                                should_cancel=should_cancel,
-                            )
-                        else:
-                            print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
-                            failed_count += 1
-                            failed_chapters.append(chapter_num)
-                            continue
-                    else:
-                        # Executa download real
-                        result = self.downloader.download(
-                            url=chapter_data['download_url'],
-                            filename=f"{self._sanitize_filename(series_title)}_cap_{chapter_label}.{chapter_data.get('format', 'cbz')}",
-                            metadata={
-                                'series': series_title,
-                                'chapter': chapter_num,
-                                'source': source_name
-                            }
-                        )
-                    
-                    if result['success']:
-                        # Registra no DB
-                        chap_record = self.library.add_chapter(
-                            series=series,
-                            volume_num=chapter_data.get('volume', 1),
-                            chapter_num=chapter_num,
-                            title=chapter_data.get('title', f"Capítulo {chapter_label}")
-                        )
-                        
-                        metadata = result.get('metadata', {})
-                        self.library.register_download(
-                            chapter=chap_record,
-                            file_path=result.get('file_path') or result.get('filepath'),
-                            file_format=metadata.get('format', 'unknown'),
-                            file_size=metadata.get('size', 0),
-                            sha256_hash=metadata.get('sha256', '')
-                        )
-                        
-                        downloaded_count += 1
-                        print(f"      ✅ Sucesso! ({metadata.get('size', 0) / 1024 / 1024:.2f} MB)")
-                    else:
-                        failed_count += 1
-                        failed_chapters.append(chapter_num)
-                        print(f"      ❌ Falha no download: {result.get('error', 'Erro desconhecido')}")
-                        if result.get('cancelled'):
-                            cancelled = True
-
-                except Exception as e:
-                    failed_count += 1
-                    failed_chapters.append(chapter_num)
-                    print(f"      ❌ Erro inesperado: {e}")
-
-                if cancelled:
-                    print("   ⏹️  Download cancelado pelo usuário.")
-                    break
-
-                # Rate limiting interrompível entre capítulos
-                waited = 0.0
-                while waited < 2.0:
+            pending = list(missing_chapters)
+            for round_index in range(3):  # 1 principal + 2 re-tentativas
+                still_failed = []
+                for chapter_num in pending:
                     if should_cancel is not None and should_cancel():
-                        cancelled = True
                         print("   ⏹️  Download cancelado pelo usuário.")
+                        cancelled = True
                         break
-                    time.sleep(0.2)
-                    waited += 0.2
-
-                if cancelled:
+                    ok = self._attempt_chapter(scraper, series, series_reference, series_title,
+                                               chapter_num, source_name, language,
+                                               progress_callback, should_cancel)
+                    if ok:
+                        downloaded_count += 1
+                    else:
+                        still_failed.append(chapter_num)
+                if cancelled or not still_failed:
+                    pending = still_failed
                     break
+                print(f"   🔁 Re-tentando {len(still_failed)} capítulo(s) (rodada {round_index + 2})...")
+                pending = still_failed
+
+            # Fallback de idioma, por capítulo, só após esgotar o primário
+            if pending and fallback_language and not cancelled:
+                print(f"   🌐 Tentando fallback de idioma ({fallback_language}) em {len(pending)} capítulo(s)...")
+                still_failed = []
+                for chapter_num in pending:
+                    if should_cancel is not None and should_cancel():
+                        print("   ⏹️  Download cancelado pelo usuário.")
+                        cancelled = True
+                        break
+                    ok = self._attempt_chapter(scraper, series, series_reference, series_title,
+                                               chapter_num, source_name, fallback_language,
+                                               progress_callback, should_cancel)
+                    if ok:
+                        downloaded_count += 1
+                    else:
+                        still_failed.append(chapter_num)
+                pending = still_failed
+
+            failed_chapters = pending
+            failed_count = len(failed_chapters)
 
             # Resumo final
             print(f"\n{'='*60}")
@@ -432,6 +471,32 @@ class MediaBot:
             }
         finally:
             self.downloader.progress_callback = previous_progress_callback
+
+    def list_series_chapters(self, series_title: str, media_type: str = "manga", source_name: str = "mangadex",
+                             language: str = "pt-br", fallback_language: Optional[str] = None) -> Dict[str, Any]:
+        """Lista capítulos disponíveis (idioma primário + fallback opcional) vs. baixados localmente."""
+        series = self.library.get_or_create_series(series_title, source_name)
+        primary = self.get_complete_series_chapters(series_title, source_name, media_type, language=language)
+        by_language = {c: [language] for c in primary}
+        available = set(primary)
+        if fallback_language:
+            try:
+                scraper = self._resolve_scraper(source_name)
+                ref = self._resolve_series_reference(scraper, series_title, media_type)
+                fb = sorted(set(scraper.get_all_chapters(ref, language=fallback_language)))
+            except Exception:
+                fb = []
+            for c in fb:
+                available.add(c)
+                by_language.setdefault(c, [])
+                if fallback_language not in by_language[c]:
+                    by_language[c].append(fallback_language)
+        available = sorted(available)
+        missing_online = self.library.find_missing_chapters(series, available)
+        downloaded = sorted(set(available) - set(missing_online))
+        missing = sorted(set(available) - set(downloaded))
+        return {'title': series.title, 'source': source_name, 'available': available,
+                'downloaded': downloaded, 'missing': missing, 'by_language': by_language}
 
     def check_collection_status(self, series_title: str):
         """Exibe status detalhado de uma coleção."""
