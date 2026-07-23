@@ -49,3 +49,7 @@ media_bot_settings.json
 
 # Saída de exportação (Komga/Kavita)
 exports/
+
+# SQLite WAL
+*.db-shm
+*.db-wal
