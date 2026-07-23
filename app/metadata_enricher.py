@@ -69,6 +69,7 @@ class MetadataEnricher:
             "score": manga.get("score"),
             "synopsis": manga.get("synopsis"),
             "cover_image": (manga.get("images", {}).get("jpg", {}) or {}).get("large_image_url"),
+            "authors": [a.get("name") for a in manga.get("authors", []) if a.get("name")],
         }
 
     def _from_anilist(self, title: str) -> Optional[Dict[str, Any]]:
@@ -95,4 +96,5 @@ class MetadataEnricher:
             "score": media.get("averageScore"),
             "synopsis": media.get("description"),
             "cover_image": (media.get("coverImage", {}) or {}).get("large"),
+            "authors": [],
         }

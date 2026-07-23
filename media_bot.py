@@ -31,6 +31,7 @@ from database import db_manager, Series, MediaFile
 from library_manager import LibraryManager
 from normalizer import ContentNormalizer
 from cache_manager import CacheManager
+from app.output_writer import OutputWriter
 
 
 class MediaBot:
@@ -130,7 +131,9 @@ class MediaBot:
     def _download_mangadex_chapter(self, scraper: MangaDexScraper, chapter_data: Dict[str, Any],
                                    series_title: str, chapter_num: float,
                                    progress_callback: Optional[Any] = None,
-                                   should_cancel: Optional[Any] = None) -> Dict[str, Any]:
+                                   should_cancel: Optional[Any] = None,
+                                   series_meta: Optional[Dict[str, Any]] = None,
+                                   language: str = "pt-br") -> Dict[str, Any]:
         page_urls = chapter_data.get('page_urls') or []
         if not page_urls:
             return {
@@ -142,33 +145,41 @@ class MediaBot:
         filename = f"{self._sanitize_filename(series_title)}_cap_{chapter_label}.cbz"
         output_path = self.base_dir / filename
 
+        pages = []
         try:
-            with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-                for index, page_url in enumerate(page_urls, 1):
-                    if should_cancel is not None and should_cancel():
-                        raise RuntimeError("cancelled")
-                    content = scraper.fetch_page(page_url, should_cancel=should_cancel)
-                    suffix = Path(urlparse(page_url).path).suffix or '.jpg'
-                    archive.writestr(f"{index:03d}{suffix}", content)
+            for index, page_url in enumerate(page_urls, 1):
+                if should_cancel is not None and should_cancel():
+                    raise RuntimeError("cancelled")
+                content = scraper.fetch_page(page_url, should_cancel=should_cancel)
+                suffix = Path(urlparse(page_url).path).suffix or '.jpg'
+                pages.append((f"{index:03d}{suffix}", content))
 
-                    if progress_callback:
-                        progress_callback(f"{series_title} cap. {chapter_label}", index, len(page_urls))
+                if progress_callback:
+                    progress_callback(f"{series_title} cap. {chapter_label}", index, len(page_urls))
 
-            file_hash = self.downloader.calculate_hash(str(output_path))
-            file_size = output_path.stat().st_size
+            comicinfo = dict(series_meta or {})
+            comicinfo.setdefault('series', series_title)
+            comicinfo.update({
+                'number': chapter_num,
+                'volume': chapter_data.get('volume'),
+                'title': chapter_data.get('title'),
+                'page_count': len(pages),
+                'language': language,
+            })
+            result = OutputWriter().write_cbz(pages, comicinfo, output_path)
             return {
                 'success': True,
-                'filepath': str(output_path),
-                'file_path': str(output_path),
-                'size': file_size,
-                'hash': file_hash,
+                'filepath': result['filepath'],
+                'file_path': result['filepath'],
+                'size': result['size'],
+                'hash': result['sha256'],
                 'error': None,
                 'retries': 0,
                 'resumed': False,
                 'metadata': {
                     'format': 'cbz',
-                    'size': file_size,
-                    'sha256': file_hash,
+                    'size': result['size'],
+                    'sha256': result['sha256'],
                 }
             }
         except Exception as exc:
@@ -256,7 +267,8 @@ class MediaBot:
 
     def _attempt_chapter(self, scraper, series, series_reference: str, series_title: str,
                          chapter_num: float, source_name: str, language: str,
-                         progress_callback: Optional[Any], should_cancel: Optional[Any]) -> str:
+                         progress_callback: Optional[Any], should_cancel: Optional[Any],
+                         series_meta: Optional[Dict[str, Any]] = None) -> str:
         """Tenta baixar e registrar um único capítulo.
 
         Retorna um status: "ok" (sucesso), "fail" (falha genuína, pode ser
@@ -279,6 +291,8 @@ class MediaBot:
                         chapter_num,
                         progress_callback=progress_callback,
                         should_cancel=should_cancel,
+                        series_meta=series_meta,
+                        language=language,
                     )
                 else:
                     print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
@@ -384,6 +398,22 @@ class MediaBot:
 
         # Passo 2: Obter todos os capítulos disponíveis na fonte (idioma primário)
         series_reference = self._resolve_series_reference(scraper, series_title, media_type)
+
+        # Metadados da série para o ComicInfo.xml (1x por download; degrada a vazio)
+        series_meta = {'series': series_title}
+        try:
+            from app.metadata_enricher import MetadataEnricher
+            enriched = MetadataEnricher(cache=self.cache).enrich(series_title) or {}
+            authors = enriched.get('authors') or []
+            series_meta.update({
+                'summary': enriched.get('synopsis'),
+                'writer': ", ".join(authors) if authors else None,
+                'count': enriched.get('chapters'),
+                'web': series_reference if str(series_reference).startswith('http') else None,
+            })
+        except Exception:
+            pass
+
         available_chapters = self.get_complete_series_chapters(series_reference, source_name, media_type,
                                                                 language=language)
 
@@ -432,7 +462,8 @@ class MediaBot:
                         break
                     status = self._attempt_chapter(scraper, series, series_reference, series_title,
                                                    chapter_num, source_name, language,
-                                                   progress_callback, should_cancel)
+                                                   progress_callback, should_cancel,
+                                                   series_meta=series_meta)
                     if status == "ok":
                         downloaded_count += 1
                     elif status == "cancelled":
@@ -463,7 +494,8 @@ class MediaBot:
                         break
                     status = self._attempt_chapter(scraper, series, series_reference, series_title,
                                                    chapter_num, source_name, fallback_language,
-                                                   progress_callback, should_cancel)
+                                                   progress_callback, should_cancel,
+                                                   series_meta=series_meta)
                     if status == "ok":
                         downloaded_count += 1
                     elif status == "cancelled":

@@ -106,7 +106,8 @@ def test_cancelled_chapter_not_in_failed_chapters(monkeypatch):
         )
 
         def fake_mangadex_download(scraper_arg, chapter_data, series_title, chapter_num,
-                                    progress_callback=None, should_cancel=None):
+                                    progress_callback=None, should_cancel=None,
+                                    series_meta=None, language="pt-br"):
             # Simula cancelamento no meio do download (ex.: entre páginas).
             return {"success": False, "cancelled": True, "error": "cancelled"}
 
