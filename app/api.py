@@ -61,13 +61,13 @@ class Api:
 
     # --- síncronos ---
     def library(self) -> Any:
-        return self._service.run_sync("library", lambda bot, emit: bot.get_library_data())
+        return self._service.run_sync("library", lambda bot, emit: bot.get_library_data(), quiet=True)
 
     def dashboard_stats(self) -> Any:
-        return self._service.run_sync("dashboard", lambda bot, emit: bot.dashboard_stats())
+        return self._service.run_sync("dashboard", lambda bot, emit: bot.dashboard_stats(), quiet=True)
 
     def series_status(self, series: str) -> Any:
-        return self._service.run_sync("status", lambda bot, emit: bot.get_series_status_data(series))
+        return self._service.run_sync("status", lambda bot, emit: bot.get_series_status_data(series), quiet=True)
 
     def graph_status(self) -> Any:
         def fn(bot, emit):
@@ -76,20 +76,20 @@ class Api:
         return {"job_id": self._service.submit("Status do grafo", fn)}
 
     def clear_cache(self) -> Dict[str, int]:
-        removed = self._service.run_sync("cache-clear", lambda bot, emit: bot.clear_cache())
+        removed = self._service.run_sync("cache-clear", lambda bot, emit: bot.clear_cache(), quiet=True)
         return {"removed": removed}
 
     def enrich_metadata(self, title: str) -> Any:
         def fn(bot, emit):
             enricher = MetadataEnricher(cache=bot.cache)
             return enricher.enrich(title)
-        return self._service.run_sync("enrich", fn)
+        return self._service.run_sync("enrich", fn, quiet=True)
 
     def export_komga(self, series: str) -> Any:
         def fn(bot, emit):
             exporter = KomgaExporter(library=bot.library)
             return exporter.export_series(series)
-        return self._service.run_sync("export", fn)
+        return self._service.run_sync("export", fn, quiet=True)
 
     def cancel_job(self, job_id: str) -> Dict[str, bool]:
         self._service.cancel(job_id)

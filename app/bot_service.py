@@ -93,13 +93,13 @@ class BotService:
     # --- submissão ---
     def submit(self, label: str, fn: Job) -> str:
         job_id = uuid.uuid4().hex
-        self._queue.put((job_id, label, fn, None))
+        self._queue.put((job_id, label, fn, None, False))
         return job_id
 
-    def run_sync(self, label: str, fn: Job, timeout: float = 120) -> Any:
+    def run_sync(self, label: str, fn: Job, timeout: float = 120, quiet: bool = False) -> Any:
         job_id = uuid.uuid4().hex
         box: dict = {"event": threading.Event(), "result": None, "error": None}
-        self._queue.put((job_id, label, fn, box))
+        self._queue.put((job_id, label, fn, box, quiet))
         if not box["event"].wait(timeout):
             raise TimeoutError(f"Operação '{label}' excedeu {timeout}s")
         if box["error"] is not None:
@@ -121,14 +121,15 @@ class BotService:
             item = self._queue.get()
             if item is _SENTINEL:
                 break
-            job_id, label, fn, box = item
+            job_id, label, fn, box, quiet = item
             if self._bot is None:
                 self._bot = self._bot_factory()
 
             def emit(name: str, payload: dict) -> None:
                 self._event_sink(name, {**payload, "job_id": job_id})
 
-            self._event_sink("job_started", {"job_id": job_id, "label": label})
+            if not quiet:
+                self._event_sink("job_started", {"job_id": job_id, "label": label})
             stream = _EmittingStream(emit)
             try:
                 with contextlib.redirect_stdout(stream):
@@ -136,7 +137,8 @@ class BotService:
                 stream.flush()
                 if box is not None:
                     box["result"] = result
-                self._event_sink("job_done", {"job_id": job_id, "label": label, "result": result})
+                if not quiet:
+                    self._event_sink("job_done", {"job_id": job_id, "label": label, "result": result})
             except Exception as exc:  # noqa: BLE001 — a UI precisa do erro
                 stream.flush()
                 if box is not None:

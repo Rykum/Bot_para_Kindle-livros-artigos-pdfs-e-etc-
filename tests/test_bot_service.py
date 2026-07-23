@@ -155,6 +155,47 @@ def test_double_stop_while_busy_leaves_no_orphan_sentinel():
         service.stop()
 
 
+def test_run_sync_quiet_suppresses_lifecycle_events():
+    events = []
+    service = make_service(events)
+    service.start()
+    try:
+        result = service.run_sync("quiet-read", lambda bot, emit: 99, quiet=True)
+        assert result == 99
+        assert not any(n == "job_started" for n, _ in events)
+        assert not any(n == "job_done" for n, _ in events)
+
+        events.clear()
+        result = service.run_sync("loud-read", lambda bot, emit: 1, quiet=False)
+        assert result == 1
+        assert any(n == "job_started" for n, _ in events)
+        assert any(n == "job_done" for n, _ in events)
+    finally:
+        service.stop()
+
+
+def test_run_sync_quiet_still_emits_job_error_on_exception():
+    events = []
+    service = make_service(events)
+    service.start()
+
+    def boom(bot, emit):
+        raise ValueError("silenciosa mas falhou")
+
+    try:
+        raised = None
+        try:
+            service.run_sync("quiet-boom", boom, quiet=True)
+        except ValueError as exc:
+            raised = exc
+        assert raised is not None and "silenciosa mas falhou" in str(raised)
+        assert not any(n == "job_started" for n, _ in events)
+        assert not any(n == "job_done" for n, _ in events)
+        assert any(n == "job_error" for n, _ in events)
+    finally:
+        service.stop()
+
+
 def test_restart_uses_fresh_bot():
     events = []
     instantiations = {"count": 0}

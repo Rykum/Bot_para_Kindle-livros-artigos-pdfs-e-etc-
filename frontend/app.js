@@ -20,6 +20,9 @@ function api() {
   return window.pywebview && window.pywebview.api;
 }
 
+// --- download em andamento (para o botão Cancelar) ---
+let currentDownloadJob = null;
+
 // --- navegação ---
 document.querySelectorAll(".nav-item").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -40,8 +43,20 @@ on("log", (p) => {
   el.scrollTop = el.scrollHeight;
 });
 on("job_started", (p) => { logEl().textContent += `\n=== ${p.label} ===\n`; });
-on("job_done", (p) => { logEl().textContent += `✅ ${p.label} concluído.\n`; logEl().scrollTop = logEl().scrollHeight; });
-on("job_error", (p) => { logEl().textContent += `❌ Erro: ${p.error}\n`; });
+on("job_done", (p) => {
+  logEl().textContent += `✅ ${p.label} concluído.\n`;
+  logEl().scrollTop = logEl().scrollHeight;
+  if (p.job_id && p.job_id === currentDownloadJob) {
+    document.getElementById("progress-text").textContent = "Download concluído.";
+    currentDownloadJob = null;
+  }
+});
+on("job_error", (p) => {
+  logEl().textContent += `❌ Erro: ${p.error}\n`;
+  if (p.job_id && p.job_id === currentDownloadJob) {
+    currentDownloadJob = null;
+  }
+});
 
 // --- progresso ---
 on("progress", (p) => {
@@ -68,8 +83,9 @@ on("search_results", (p) => {
     div.innerHTML = `<h3>${r.title || r.series_name || "Sem título"}</h3>
       <p class="muted">${r.source || "?"} · ${r.format_type || r.format || "?"}</p>
       <button class="btn success">Baixar série</button>`;
-    div.querySelector("button").addEventListener("click", () => {
-      api().download_series(r.title || r.series_name, mtOf(), r.source || "mangadex");
+    div.querySelector("button").addEventListener("click", async () => {
+      const ack = await api().download_series(r.title || r.series_name, mtOf(), r.source || "mangadex");
+      currentDownloadJob = ack && ack.job_id ? ack.job_id : null;
       goTo("downloads");
     });
     box.appendChild(div);
@@ -142,6 +158,10 @@ document.getElementById("btn-cache").addEventListener("click", async () => {
   alert(`Cache removido: ${r.removed} arquivo(s)`);
 });
 document.getElementById("btn-graph").addEventListener("click", () => { api().graph_status(); goTo("downloads"); });
+document.getElementById("btn-cancel").addEventListener("click", () => {
+  if (!currentDownloadJob) return;
+  api().cancel_job(currentDownloadJob);
+});
 
 // --- init ---
 window.addEventListener("pywebviewready", () => {
