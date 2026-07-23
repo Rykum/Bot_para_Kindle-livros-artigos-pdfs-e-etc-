@@ -6,7 +6,7 @@ Modela Séries, Volumes, Capítulos e Arquivos baixados.
 
 import os
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Boolean, UniqueConstraint, event
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -14,6 +14,12 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "media_bot.db"
+
+
+def _utcnow():
+    """Timestamp UTC timezone-aware (substitui o datetime.utcnow depreciado)."""
+    return datetime.now(timezone.utc)
+
 
 Base = declarative_base()
 
@@ -30,8 +36,8 @@ class Series(Base):
     status = Column(String) # 'ongoing', 'completed', 'unknown'
     total_volumes = Column(Integer, nullable=True)
     total_chapters = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     volumes = relationship("Volume", back_populates="series", cascade="all, delete-orphan")
 
@@ -102,8 +108,8 @@ class DownloadJob(Base):
     fallback_language = Column(String, nullable=True)
     status = Column(String, default='queued')  # queued/downloading/done/failed/cancelled
     error = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     def __repr__(self):
         return f"<DownloadJob(series='{self.series}', chapter={self.chapter_number}, status='{self.status}')>"

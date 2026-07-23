@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import and_
 from database import db_manager, Series, Volume, Chapter, MediaFile
 from normalizer import ContentNormalizer
-from datetime import datetime
+from datetime import datetime, timezone
 
 class LibraryManager:
     """Gerenciador de biblioteca local e detecção de itens faltantes."""
@@ -47,7 +47,7 @@ class LibraryManager:
         for key, value in kwargs.items():
             if hasattr(series, key) and value is not None:
                 setattr(series, key, value)
-        series.updated_at = datetime.utcnow()
+        series.updated_at = datetime.now(timezone.utc)
         self.session.commit()
 
     # --- CRUD: VOLUMES & CAPÍTULOS ---
@@ -100,7 +100,7 @@ class LibraryManager:
             file_size=file_size,
             sha256_hash=sha256_hash,
             download_status='completed',
-            downloaded_at=datetime.utcnow()
+            downloaded_at=datetime.now(timezone.utc)
         )
         self.session.add(media_file)
         self.session.commit()
