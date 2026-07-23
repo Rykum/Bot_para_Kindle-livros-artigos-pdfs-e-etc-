@@ -9,71 +9,156 @@
 <body>
   <div id="app">
     <aside class="sidebar">
-      <div class="brand">📚 Media Bot</div>
+      <div class="brand"><span>📚</span> Media Bot</div>
+      <div class="brand-sub">Biblioteca PT-BR</div>
       <nav>
-        <button class="nav-item active" data-view="dashboard">Dashboard</button>
-        <button class="nav-item" data-view="search">Buscar</button>
-        <button class="nav-item" data-view="library">Biblioteca</button>
-        <button class="nav-item" data-view="downloads">Downloads</button>
-        <button class="nav-item" data-view="tools">Ferramentas</button>
+        <button class="nav-item active" data-view="dashboard"><span class="ico">📊</span> Dashboard</button>
+        <button class="nav-item" data-view="search"><span class="ico">🔎</span> Buscar</button>
+        <button class="nav-item" data-view="library"><span class="ico">📖</span> Biblioteca</button>
+        <button class="nav-item" data-view="downloads"><span class="ico">⬇️</span> Downloads</button>
+        <button class="nav-item" data-view="tools"><span class="ico">⚙️</span> Ferramentas</button>
       </nav>
       <div class="sidebar-foot" id="conn-state">Conectando…</div>
     </aside>
+
     <main class="content">
-      <section id="view-dashboard" class="view active"><h1>Dashboard</h1><div id="dash-cards" class="card-grid"></div></section>
+      <!-- Dashboard -->
+      <section id="view-dashboard" class="view active">
+        <div class="view-head">
+          <h1>Dashboard</h1>
+          <div class="sub">Visão geral da sua biblioteca.</div>
+        </div>
+        <div id="dash-cards" class="card-grid"></div>
+      </section>
+
+      <!-- Buscar -->
       <section id="view-search" class="view">
-        <h1>Buscar</h1>
-        <div class="form-row">
-          <input id="q" placeholder="Título da série" value="Dandadan" />
-          <select id="media-type"><option>manga</option><option>livro</option><option>hq</option><option>manhwa</option><option>artigo</option></select>
-          <button id="btn-search" class="btn accent">Buscar</button>
+        <div class="view-head">
+          <h1>Buscar</h1>
+          <div class="sub">Encontre uma série em todas as fontes disponíveis.</div>
+        </div>
+        <div class="panel">
+          <div class="search-bar">
+            <div class="search-input"><input id="q" placeholder="Título da série" value="Dandadan" /></div>
+            <select id="media-type" title="Tipo de mídia">
+              <option>manga</option><option>livro</option><option>hq</option><option>manhwa</option><option>artigo</option>
+            </select>
+            <button id="btn-search" class="btn accent">Buscar</button>
+          </div>
         </div>
         <div id="search-results" class="card-grid"></div>
       </section>
+
+      <!-- Seletor de capítulos -->
       <section id="view-chapters" class="view">
-        <div class="row-between">
-          <h1 id="chapters-title">Capítulos</h1>
-          <button id="btn-chapters-back" class="btn">← Voltar</button>
+        <div class="view-head row-between">
+          <div>
+            <h1 id="chapters-title">Capítulos</h1>
+            <div id="chapters-summary" class="sub">—</div>
+          </div>
+          <button id="btn-chapters-back" class="btn ghost">← Voltar</button>
         </div>
-        <div class="form-row">
-          <label title="Idioma principal da busca/download">Idioma
-            <select id="lang-primary"><option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option></select>
-          </label>
-          <label title="Idioma usado só se o capítulo não vier no principal, após esgotar as re-tentativas">Fallback
-            <select id="lang-fallback"><option value="">nenhum</option><option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option></select>
-          </label>
+
+        <div class="panel">
+          <div class="panel-title">Idioma</div>
+          <div class="fields">
+            <div class="field">
+              <label for="lang-primary">Idioma principal</label>
+              <select id="lang-primary" title="Idioma principal da busca/download">
+                <option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="lang-fallback">Idioma secundário (fallback)</label>
+              <select id="lang-fallback" title="Usado só se o capítulo não vier no principal, após esgotar as re-tentativas">
+                <option value="">nenhum</option><option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option>
+              </select>
+              <span class="hint">Só entra em ação após esgotar o idioma principal.</span>
+            </div>
+          </div>
         </div>
-        <p id="chapters-summary" class="muted">—</p>
-        <div class="form-row">
-          <button id="btn-download-all" class="btn success">Baixar tudo (faltantes)</button>
-          <span class="muted">Intervalo:</span>
-          <input id="range-from" type="number" min="0" style="max-width:90px" placeholder="de" />
-          <input id="range-to" type="number" min="0" style="max-width:90px" placeholder="até" />
-          <button id="btn-range-apply" class="btn">Aplicar</button>
-          <button id="btn-download-selected" class="btn accent" disabled>Baixar selecionados (0)</button>
+
+        <div class="panel">
+          <div class="panel-title">Download</div>
+          <div class="fields" style="align-items:end">
+            <div class="field">
+              <label for="range-from">Intervalo — de</label>
+              <input id="range-from" type="number" min="0" placeholder="ex.: 1" />
+            </div>
+            <div class="field">
+              <label for="range-to">até</label>
+              <input id="range-to" type="number" min="0" placeholder="ex.: 50" />
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button id="btn-range-apply" class="btn">Aplicar intervalo</button>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:16px">
+            <button id="btn-download-all" class="btn success">Baixar tudo (faltantes)</button>
+            <button id="btn-download-selected" class="btn accent" disabled>Baixar selecionados (0)</button>
+          </div>
         </div>
-        <div id="chapter-grid" class="chapter-grid"></div>
+
+        <div class="panel">
+          <div class="panel-title">Capítulos disponíveis</div>
+          <div id="chapter-grid" class="chapter-grid"></div>
+        </div>
       </section>
-      <!-- Capas: placeholder inline (data-URI SVG, sem CDN) via COVER_PLACEHOLDER em app.js;
-           substituído em tempo de execução pela capa real retornada por Api.enrich_metadata. -->
-      <section id="view-library" class="view"><h1>Biblioteca</h1><div id="library-cards" class="card-grid"></div></section>
+
+      <!-- Biblioteca -->
+      <section id="view-library" class="view">
+        <div class="view-head">
+          <h1>Biblioteca</h1>
+          <div class="sub">Suas séries baixadas, com capa e progresso.</div>
+        </div>
+        <!-- Capas: placeholder inline (data-URI SVG, sem CDN) via COVER_PLACEHOLDER em app.js;
+             substituído em tempo de execução pela capa real de Api.enrich_metadata. -->
+        <div id="library-cards" class="card-grid"></div>
+      </section>
+
+      <!-- Downloads / Fila -->
       <section id="view-downloads" class="view">
-        <h1>Downloads</h1>
-        <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
-        <div id="progress-text" class="muted">Sem download em andamento.</div>
-        <div class="form-row">
-          <button id="btn-queue-pause" class="btn">Pausar fila</button>
-          <button id="btn-queue-clear" class="btn">Limpar concluídos</button>
-          <span id="queue-counts" class="muted">—</span>
+        <div class="view-head">
+          <h1>Downloads</h1>
+          <div class="sub">Fila persistente — acompanhe, pause e gerencie por item.</div>
         </div>
-        <div id="queue-list" class="queue-list"></div>
-        <pre id="log" class="log"></pre>
+
+        <div class="panel">
+          <div class="panel-title">Item atual</div>
+          <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
+          <div id="progress-text" class="muted">Sem download em andamento.</div>
+        </div>
+
+        <div class="panel">
+          <div class="row-between" style="align-items:center; margin-bottom:16px">
+            <div class="panel-title" style="margin:0">Fila</div>
+            <div class="actions">
+              <span id="queue-counts" class="pill">—</span>
+              <button id="btn-queue-pause" class="btn sm">Pausar fila</button>
+              <button id="btn-queue-clear" class="btn sm ghost">Limpar concluídos</button>
+            </div>
+          </div>
+          <div id="queue-list" class="queue-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Log em tempo real</div>
+          <pre id="log" class="log"></pre>
+        </div>
       </section>
+
+      <!-- Ferramentas -->
       <section id="view-tools" class="view">
-        <h1>Ferramentas</h1>
-        <div class="form-row">
-          <button id="btn-cache" class="btn warn">Limpar cache</button>
-          <button id="btn-graph" class="btn">Status do grafo</button>
+        <div class="view-head">
+          <h1>Ferramentas</h1>
+          <div class="sub">Manutenção e diagnóstico.</div>
+        </div>
+        <div class="panel">
+          <div class="actions">
+            <button id="btn-cache" class="btn warn">Limpar cache</button>
+            <button id="btn-graph" class="btn ghost">Status do grafo</button>
+          </div>
         </div>
       </section>
     </main>

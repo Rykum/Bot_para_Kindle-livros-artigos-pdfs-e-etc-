@@ -86,8 +86,8 @@ on("search_results", (p) => {
     const div = document.createElement("div");
     div.className = "card";
     div.innerHTML = `<h3>${r.title || r.series_name || "Sem título"}</h3>
-      <p class="muted">${r.source || "?"} · ${r.format_type || r.format || "?"}</p>
-      <button class="btn success">Baixar série</button>`;
+      <div style="margin:6px 0 12px"><span class="pill">${r.source || "?"} · ${r.format_type || r.format || "?"}</span></div>
+      <button class="btn success" style="width:100%">Baixar série →</button>`;
     div.querySelector("button").addEventListener("click", () => openChapters(r.title || r.series_name, r.source || "mangadex", mtOf()));
     box.appendChild(div);
   });
@@ -197,26 +197,30 @@ function renderQueue(items) {
   if (cEl) cEl.textContent =
     `${counts.queued || 0} na fila · ${counts.downloading || 0} baixando · ${counts.done || 0} ok · ${counts.failed || 0} falhou`;
   box.innerHTML = "";
+  if (!items.length) {
+    box.innerHTML = '<div class="queue-empty">Fila vazia — busque uma série e escolha os capítulos para baixar.</div>';
+    return;
+  }
   items.forEach((i) => {
-    const chap = i.chapter_number == null ? "série completa" : "cap " + i.chapter_number;
+    const chap = i.chapter_number == null ? "série completa" : "capítulo " + i.chapter_number;
     const div = document.createElement("div");
     div.className = "queue-item";
     div.innerHTML = `<span class="queue-badge ${i.status}">${i.status}</span>
-      <span class="title">${i.series} · ${chap}</span>`;
+      <span class="title">${i.series} <small>· ${chap}</small></span>`;
     if (i.status === "failed") {
       const r = document.createElement("button");
-      r.className = "btn"; r.textContent = "Re-tentar";
+      r.className = "btn sm"; r.textContent = "Re-tentar";
       r.addEventListener("click", () => api().retry_item(i.id).then(loadQueue));
       div.appendChild(r);
     }
     if (i.status === "queued" || i.status === "downloading") {
       const c = document.createElement("button");
-      c.className = "btn warn"; c.textContent = "Cancelar";
+      c.className = "btn sm warn"; c.textContent = "Cancelar";
       c.addEventListener("click", () => api().cancel_item(i.id).then(loadQueue));
       div.appendChild(c);
     }
     const rm = document.createElement("button");
-    rm.className = "btn"; rm.textContent = "×";
+    rm.className = "btn sm ghost"; rm.title = "Remover"; rm.textContent = "×";
     rm.addEventListener("click", () => api().remove_item(i.id).then(loadQueue));
     div.appendChild(rm);
     box.appendChild(div);
@@ -250,9 +254,9 @@ async function loadLibrary() {
       <p class="muted">${s.is_complete ? "✅ Completa" : "⏳ " + pct + "%"}</p>
       <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
       <p class="muted">${s.chapters_downloaded}/${s.total_chapters_registered} caps</p>
-      <div class="form-row" style="margin-top:10px">
-        <button class="btn">Status</button>
-        <button class="btn success">Exportar</button>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn sm">Status</button>
+        <button class="btn sm success">Exportar</button>
       </div>`;
     const [statusBtn, exportBtn] = div.querySelectorAll("button");
     statusBtn.addEventListener("click", async () => {
@@ -280,13 +284,13 @@ async function loadDashboard() {
   const s = await api().dashboard_stats();
   box.innerHTML = "";
   const cards = [
-    ["Séries", s.total_series], ["Itens baixados", s.total_downloaded],
-    ["Coleções completas", s.complete_collections], ["Itens faltantes", s.missing_total],
+    ["📚", "Séries", s.total_series], ["⬇️", "Itens baixados", s.total_downloaded],
+    ["✅", "Coleções completas", s.complete_collections], ["🧩", "Itens faltantes", s.missing_total],
   ];
-  cards.forEach(([label, value]) => {
+  cards.forEach(([ico, label, value]) => {
     const div = document.createElement("div");
-    div.className = "card";
-    div.innerHTML = `<div class="stat">${value}</div><p class="muted">${label}</p>`;
+    div.className = "card stat-card";
+    div.innerHTML = `<div class="ico">${ico}</div><div class="stat">${value}</div><p class="muted">${label}</p>`;
     box.appendChild(div);
   });
 }
