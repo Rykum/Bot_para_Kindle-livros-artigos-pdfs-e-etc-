@@ -146,15 +146,32 @@ class MediaBot:
 
         pages = []
         try:
-            for index, page_url in enumerate(page_urls, 1):
+            urls = list(page_urls)
+            reresolved = False
+            index = 0
+            while index < len(urls):
                 if should_cancel is not None and should_cancel():
                     raise RuntimeError("cancelled")
-                content = scraper.fetch_page(page_url, should_cancel=should_cancel)
+                page_url = urls[index]
+                try:
+                    content = scraper.fetch_page(page_url, should_cancel=should_cancel)
+                except Exception as exc:
+                    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+                    chapter_id = chapter_data.get('chapter_id')
+                    if (status in (403, 404, 410) and not reresolved
+                            and chapter_id and hasattr(scraper, 'reresolve_pages')):
+                        print("      🔄 URLs expiradas, re-resolvendo…")
+                        new_urls = scraper.reresolve_pages(chapter_id)
+                        if new_urls and len(new_urls) == len(urls):
+                            urls = new_urls
+                            reresolved = True
+                            continue  # re-tenta o mesmo índice com a URL nova
+                    raise
                 suffix = Path(urlparse(page_url).path).suffix or '.jpg'
-                pages.append((f"{index:03d}{suffix}", content))
-
+                pages.append((f"{index + 1:03d}{suffix}", content))
                 if progress_callback:
-                    progress_callback(f"{series_title} cap. {chapter_label}", index, len(page_urls))
+                    progress_callback(f"{series_title} cap. {chapter_label}", index + 1, len(urls))
+                index += 1
 
             comicinfo = dict(series_meta or {})
             comicinfo.setdefault('series', series_title)

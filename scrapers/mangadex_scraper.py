@@ -7,6 +7,7 @@ Documentação: https://api.mangadex.org/docs.html
 """
 
 import logging
+import requests
 from typing import List, Dict, Optional
 from .base_scraper import BaseScraper, ScrapedResult
 
@@ -292,9 +293,31 @@ class MangaDexScraper(BaseScraper):
             try:
                 self.rate_limiter.wait(page_url)
                 response = self.session.get(page_url, timeout=60)
+                if response.status_code == 429:
+                    retry_after = response.headers.get('Retry-After')
+                    try:
+                        wait_time = float(retry_after) if retry_after is not None else 1.5 ** attempt
+                    except (TypeError, ValueError):
+                        wait_time = 1.5 ** attempt
+                    time.sleep(wait_time)
+                    continue
                 response.raise_for_status()
                 return response.content
+            except requests.exceptions.HTTPError as exc:
+                last_error = exc
+                # URLs expiradas não adiantam re-tentar: propaga para re-resolução
+                status = getattr(exc.response, 'status_code', None)
+                if status in (403, 404, 410):
+                    raise
+                time.sleep(1.5 ** attempt)
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 time.sleep(1.5 ** attempt)
         raise last_error if last_error else RuntimeError("falha ao baixar página")
+
+    def reresolve_pages(self, chapter_id: str):
+        try:
+            info = self.get_chapter_download_url(chapter_id)
+            return self.build_page_urls(info) if info else []
+        except Exception:
+            return []
