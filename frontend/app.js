@@ -43,6 +43,7 @@ document.querySelectorAll(".nav-item").forEach((btn) => {
     if (btn.dataset.view === "library") loadLibrary();
     if (btn.dataset.view === "dashboard") loadDashboard();
     if (btn.dataset.view === "downloads") loadQueue();
+    if (btn.dataset.view === "tools") loadDownloadDir();
   });
 });
 
@@ -314,6 +315,20 @@ document.getElementById("btn-cache").addEventListener("click", async () => {
 });
 document.getElementById("btn-graph").addEventListener("click", () => { api().graph_status(); goTo("downloads"); });
 
+// --- pasta de downloads ---
+async function loadDownloadDir() {
+  try {
+    const p = await api().get_download_dir();
+    document.getElementById("download-dir").textContent = p || "—";
+  } catch (_) {}
+}
+document.getElementById("btn-choose-dir").addEventListener("click", async () => {
+  const r = await api().choose_download_dir();
+  if (r && r.path) {
+    document.getElementById("download-dir").textContent = r.path;
+  }
+});
+
 // #6 Reconhecer em vez de lembrar: persistir idioma/fonte/tipo
 function persistPrefs() {
   localStorage.setItem("mb_prefs", JSON.stringify({
@@ -340,4 +355,5 @@ window.addEventListener("pywebviewready", () => {
   restorePrefs();
   loadDashboard();
   loadQueue();
+  loadDownloadDir();
 });

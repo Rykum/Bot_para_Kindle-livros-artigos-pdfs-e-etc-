@@ -99,6 +99,27 @@ class Api:
         removed = self._service.run_sync("cache-clear", lambda bot, emit: bot.clear_cache(), quiet=True)
         return {"removed": removed}
 
+    def get_download_dir(self) -> str:
+        return self._service.run_sync("get-dir", lambda bot, emit: str(bot.base_dir), quiet=True)
+
+    def set_download_dir(self, path: str) -> Dict[str, Any]:
+        new = self._service.run_sync("set-dir", lambda bot, emit: bot.set_download_dir(path), quiet=True)
+        return {"path": new}
+
+    def choose_download_dir(self) -> Dict[str, Any]:
+        """Abre o seletor de pasta nativo e aplica a escolha (persistida)."""
+        if self._window is None:
+            return {"path": None}
+        try:
+            import webview
+            result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+        except Exception:
+            return {"path": None}
+        if not result:
+            return {"path": None}
+        chosen = result[0] if isinstance(result, (list, tuple)) else result
+        return self.set_download_dir(chosen)
+
     def enrich_metadata(self, title: str) -> Any:
         def fn(bot, emit):
             enricher = MetadataEnricher(cache=bot.cache)

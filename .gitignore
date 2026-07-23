@@ -44,3 +44,5 @@ requirements.txt.bak
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Configurações do usuário
+media_bot_settings.json

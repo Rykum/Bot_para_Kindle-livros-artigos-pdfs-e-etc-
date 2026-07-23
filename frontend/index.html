@@ -173,9 +173,18 @@
       <section id="view-tools" class="view">
         <div class="view-head">
           <h1>Ferramentas</h1>
-          <div class="sub">Manutenção e diagnóstico.</div>
+          <div class="sub">Configurações, manutenção e diagnóstico.</div>
         </div>
         <div class="panel">
+          <div class="panel-title">Pasta de downloads</div>
+          <div class="row-between" style="align-items:center; gap:16px">
+            <code id="download-dir" class="path">—</code>
+            <button id="btn-choose-dir" class="btn accent">Escolher pasta…</button>
+          </div>
+          <div class="hint" style="margin-top:8px">Os arquivos baixados serão salvos aqui. A escolha fica salva entre sessões.</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Manutenção</div>
           <div class="actions">
             <button id="btn-cache" class="btn warn">Limpar cache</button>
             <button id="btn-graph" class="btn ghost">Status do grafo</button>

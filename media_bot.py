@@ -38,10 +38,14 @@ class MediaBot:
     Bot principal para pesquisa e download de mídias em PT-BR.
     """
 
-    def __init__(self, base_download_dir: str = "./downloads"):
+    def __init__(self, base_download_dir: Optional[str] = None):
+        # Se não vier explícito, usa a pasta salva pelo usuário (ou o padrão).
+        if base_download_dir is None:
+            from app.settings_store import get_setting
+            base_download_dir = get_setting("download_dir") or "./downloads"
         self.base_dir = Path(base_download_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Inicializa componentes
         self.library = LibraryManager()
         self.downloader = DownloadManager(str(self.base_dir))
@@ -56,6 +60,16 @@ class MediaBot:
         ]
         
         print(f"✅ Media Bot inicializado. Downloads em: {self.base_dir.absolute()}")
+
+    def set_download_dir(self, path: str) -> str:
+        """Muda a pasta de downloads (cria se preciso) e persiste a escolha."""
+        self.base_dir = Path(path)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.downloader.base_directory = self.base_dir
+        from app.settings_store import set_setting
+        set_setting("download_dir", str(self.base_dir))
+        print(f"📁 Pasta de downloads definida: {self.base_dir.absolute()}")
+        return str(self.base_dir)
 
     def _serialize_result(self, result: Any) -> Dict[str, Any]:
         if is_dataclass(result):
