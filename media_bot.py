@@ -379,6 +379,50 @@ class MediaBot:
                 pass
             return "fail"
 
+    def _download_one_chapter_with_retries(self, scraper, series, series_reference, series_title,
+                                           chapter_num, source_name, language, fallback_language,
+                                           series_meta, progress_callback, should_cancel) -> str:
+        """Baixa UM capítulo, esgotando as re-tentativas antes de seguir adiante.
+
+        Até 3 tentativas no idioma primário; se ainda assim falhar e houver
+        idioma de fallback, 1 tentativa adicional nele. Retorna "ok", "fail"
+        ou "cancelled" (mesmo contrato tri-state de `_attempt_chapter`).
+        """
+        for _ in range(3):
+            if should_cancel is not None and should_cancel():
+                return "cancelled"
+            status = self._attempt_chapter(scraper, series, series_reference, series_title,
+                                           chapter_num, source_name, language,
+                                           progress_callback, should_cancel, series_meta)
+            if status in ("ok", "cancelled"):
+                return status
+        if fallback_language:
+            if should_cancel is not None and should_cancel():
+                return "cancelled"
+            status = self._attempt_chapter(scraper, series, series_reference, series_title,
+                                           chapter_num, source_name, fallback_language,
+                                           progress_callback, should_cancel, series_meta)
+            if status in ("ok", "cancelled"):
+                return status
+        return "fail"
+
+    def download_single_chapter(self, series_title: str, chapter_num: float, source_name: str = "mangadex",
+                                media_type: str = "manga", language: str = "pt-br",
+                                fallback_language: Optional[str] = None,
+                                progress_callback: Optional[Any] = None,
+                                should_cancel: Optional[Any] = None) -> bool:
+        """Baixa um único capítulo de uma série (usado pela fila de downloads)."""
+        scraper = self._resolve_scraper(source_name)
+        if not scraper:
+            return False
+        series = self.library.get_or_create_series(series_title, source_name)
+        series_reference = self._resolve_series_reference(scraper, series_title, media_type)
+        series_meta = self._build_series_meta(series_title, source_name, media_type, series_reference)
+        status = self._download_one_chapter_with_retries(
+            scraper, series, series_reference, series_title, chapter_num, source_name,
+            language, fallback_language, series_meta, progress_callback, should_cancel)
+        return status == "ok"
+
     def _build_series_meta(self, series_title: str, source_name: str, media_type: str,
                            series_reference: str) -> Dict[str, Any]:
         """Metadados da série para o ComicInfo.xml (1x por download; degrada a vazio).
@@ -478,65 +522,36 @@ class MediaBot:
         previous_progress_callback = self.downloader.progress_callback
         self.downloader.progress_callback = progress_callback
         try:
-            # Passo 4: Baixar capítulos faltantes, com até 3 rodadas (1 principal + 2 re-tentativas)
+            # Passo 4: Baixar capítulos faltantes, um a um — cada capítulo esgota
+            # suas próprias re-tentativas + fallback de idioma antes de seguir ao
+            # próximo (via _download_one_chapter_with_retries, reaproveitável pela fila).
             downloaded_count = 0
             cancelled = False
+            failed_chapters = []
 
-            pending = list(missing_chapters)
-            for round_index in range(3):  # 1 principal + 2 re-tentativas
-                still_failed = []
-                for chapter_num in pending:
-                    if should_cancel is not None and should_cancel():
-                        print("   ⏹️  Download cancelado pelo usuário.")
-                        cancelled = True
-                        break
-                    status = self._attempt_chapter(scraper, series, series_reference, series_title,
-                                                   chapter_num, source_name, language,
-                                                   progress_callback, should_cancel,
-                                                   series_meta=series_meta)
-                    if status == "ok":
-                        downloaded_count += 1
-                    elif status == "cancelled":
-                        print("   ⏹️  Download cancelado pelo usuário.")
-                        cancelled = True
-                        break
-                    else:
-                        still_failed.append(chapter_num)
-                    # Pausa curta e cancel-responsiva entre capítulos (evita 429s).
-                    for _ in range(5):
-                        if should_cancel is not None and should_cancel():
-                            break
-                        time.sleep(0.2)
-                if cancelled or not still_failed:
-                    pending = still_failed
+            for chapter_num in missing_chapters:
+                if should_cancel is not None and should_cancel():
+                    print("   ⏹️  Download cancelado pelo usuário.")
+                    cancelled = True
                     break
-                print(f"   🔁 Re-tentando {len(still_failed)} capítulo(s) (rodada {round_index + 2})...")
-                pending = still_failed
-
-            # Fallback de idioma, por capítulo, só após esgotar o primário
-            if pending and fallback_language and not cancelled:
-                print(f"   🌐 Tentando fallback de idioma ({fallback_language}) em {len(pending)} capítulo(s)...")
-                still_failed = []
-                for chapter_num in pending:
+                status = self._download_one_chapter_with_retries(
+                    scraper, series, series_reference, series_title, chapter_num,
+                    source_name, language, fallback_language, series_meta,
+                    progress_callback, should_cancel)
+                if status == "ok":
+                    downloaded_count += 1
+                elif status == "cancelled":
+                    print("   ⏹️  Download cancelado pelo usuário.")
+                    cancelled = True
+                    break
+                else:
+                    failed_chapters.append(chapter_num)
+                # Pausa curta e cancel-responsiva entre capítulos (evita 429s).
+                for _ in range(5):
                     if should_cancel is not None and should_cancel():
-                        print("   ⏹️  Download cancelado pelo usuário.")
-                        cancelled = True
                         break
-                    status = self._attempt_chapter(scraper, series, series_reference, series_title,
-                                                   chapter_num, source_name, fallback_language,
-                                                   progress_callback, should_cancel,
-                                                   series_meta=series_meta)
-                    if status == "ok":
-                        downloaded_count += 1
-                    elif status == "cancelled":
-                        print("   ⏹️  Download cancelado pelo usuário.")
-                        cancelled = True
-                        break
-                    else:
-                        still_failed.append(chapter_num)
-                pending = still_failed
+                    time.sleep(0.2)
 
-            failed_chapters = pending
             failed_count = len(failed_chapters)
 
             # Resumo final
