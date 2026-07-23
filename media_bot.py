@@ -241,13 +241,15 @@ class MediaBot:
                 'cancelled': cancelled,
             }
 
-    def search_series(self, query: str, media_type: str = "manga") -> List[Dict[str, Any]]:
+    def search_series(self, query: str, media_type: str = "manga",
+                      language: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Busca série em todos os scrapers disponíveis.
+        `language` (opcional) filtra por idioma nas fontes que suportam (livros).
         Retorna lista unificada de resultados.
         """
-        print(f"\n🔍 Buscando por: '{query}' ({media_type})...")
-        cache_key = f"search::{query.strip().lower()}::{media_type.strip().lower()}"
+        print(f"\n🔍 Buscando por: '{query}' ({media_type}, idioma={language or 'qualquer'})...")
+        cache_key = f"search::{query.strip().lower()}::{media_type.strip().lower()}::{(language or '').lower()}"
         cached_results = self.cache.get(cache_key, max_age_seconds=24 * 3600)
         if cached_results is not None:
             print("   💾 Resultado recuperado do cache.")
@@ -255,13 +257,13 @@ class MediaBot:
 
         all_results = []
         formats = self._formats_for_media_type(media_type)
-        
+
         for scraper in self.scrapers:
             if not self._scraper_applicable(scraper, media_type):
                 continue
 
             try:
-                results = scraper.search(query, formats=formats)
+                results = scraper.search(query, formats=formats, language=language)
                 if results:
                     print(f"   📚 {scraper.name}: {len(results)} resultado(s)")
                     all_results.extend(self._serialize_result(result) for result in results)

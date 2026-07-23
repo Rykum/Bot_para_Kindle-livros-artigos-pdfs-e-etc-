@@ -28,7 +28,7 @@ class ArchiveOrgScraper(BaseScraper):
         )
         self.search_api = "https://archive.org/advancedsearch.php"
     
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
         Pesquisa no Internet Archive usando Advanced Search API
         
@@ -45,10 +45,17 @@ class ArchiveOrgScraper(BaseScraper):
         results = []
 
         try:
-            # Busca por TÍTULO entre textos (livros/HQs). Não forçamos idioma —
-            # forçar "português" excluía a maioria dos livros (ex.: Star Wars em
-            # inglês) e devolvia 0 resultados. O usuário filtra pelo que quiser.
+            # Busca por TÍTULO entre textos (livros/HQs). O idioma é opcional:
+            # sem idioma, traz tudo; com idioma, filtra (o usuário escolhe).
             search_query = f'title:({query}) AND mediatype:texts'
+            lang_terms = {
+                'pt': '(portuguese OR por OR pt OR "pt-br" OR "português")',
+                'pt-br': '(portuguese OR por OR pt OR "pt-br" OR "português")',
+                'en': '(english OR eng OR en)',
+                'es': '(spanish OR spa OR es OR "español")',
+            }.get((language or '').lower())
+            if lang_terms:
+                search_query += f' AND language:{lang_terms}'
 
             params = {
                 'q': search_query,
@@ -80,7 +87,12 @@ class ArchiveOrgScraper(BaseScraper):
                 
                 # Extrair metadados de volume/capítulo do título
                 metadata_parsed = self.parse_volume_chapter(title)
-                
+
+                # Idioma real do item (pode vir como lista).
+                doc_lang = doc.get('language')
+                if isinstance(doc_lang, list):
+                    doc_lang = doc_lang[0] if doc_lang else None
+
                 result = ScrapedResult(
                     title=title,
                     url=item_url,
@@ -90,7 +102,7 @@ class ArchiveOrgScraper(BaseScraper):
                     chapter=metadata_parsed.get('chapter'),
                     number=metadata_parsed.get('number'),
                     series_name=query,
-                    language='pt-br',
+                    language=doc_lang or 'desconhecido',
                     metadata={
                         'identifier': identifier,
                         'creator': doc.get('creator', ''),

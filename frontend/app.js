@@ -78,12 +78,13 @@ on("progress", (p) => {
 });
 
 // --- busca ---
+function searchLang() { return document.getElementById("search-lang").value; }
 document.getElementById("btn-search").addEventListener("click", async () => {
   const q = document.getElementById("q").value.trim();
   const mt = document.getElementById("media-type").value;
   if (!q) return;
   document.getElementById("search-results").innerHTML = '<p class="muted">Buscando…</p>';
-  await api().search(q, mt);
+  await api().search(q, mt, searchLang());
 });
 // #7 Eficiência: Enter no campo de busca dispara a busca
 document.getElementById("q").addEventListener("keydown", (e) => {
@@ -96,8 +97,9 @@ on("search_results", (p) => {
   p.results.forEach((r) => {
     const div = document.createElement("div");
     div.className = "card";
+    const lang = r.language && r.language !== "pt-br" ? " · " + r.language : "";
     div.innerHTML = `<h3>${r.title || r.series_name || "Sem título"}</h3>
-      <div style="margin:6px 0 12px"><span class="pill">${r.source || "?"} · ${r.format_type || r.format || "?"}</span></div>
+      <div style="margin:6px 0 12px"><span class="pill">${r.source || "?"} · ${r.format_type || r.format || "?"}${lang}</span></div>
       <button class="btn success" style="width:100%">Baixar série →</button>`;
     div.querySelector("button").addEventListener("click", () => openChapters(r.title || r.series_name, r.source || "mangadex", mtOf()));
     box.appendChild(div);
@@ -388,6 +390,7 @@ function persistPrefs() {
   localStorage.setItem("mb_prefs", JSON.stringify({
     lang: langPrimary(), fb: document.getElementById("lang-fallback").value,
     media: document.getElementById("media-type").value,
+    slang: document.getElementById("search-lang").value,
   }));
 }
 function restorePrefs() {
@@ -396,9 +399,10 @@ function restorePrefs() {
     if (p.lang) document.getElementById("lang-primary").value = p.lang;
     if (p.fb !== undefined) document.getElementById("lang-fallback").value = p.fb;
     if (p.media) document.getElementById("media-type").value = p.media;
+    if (p.slang !== undefined) document.getElementById("search-lang").value = p.slang;
   } catch (_) {}
 }
-["lang-primary", "lang-fallback", "media-type"].forEach((id) => {
+["lang-primary", "lang-fallback", "media-type", "search-lang"].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("change", persistPrefs);
 });

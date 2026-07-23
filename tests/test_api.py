@@ -3,7 +3,7 @@ from app.bot_service import BotService
 
 
 class FakeBot:
-    def search_series(self, query, media_type="manga"):
+    def search_series(self, query, media_type="manga", language=None):
         return [{"title": query, "source": "mangadex", "format_type": "cbz", "url": "http://x"}]
 
     def get_library_data(self):

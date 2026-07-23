@@ -34,6 +34,23 @@ def test_search_query_uses_title_and_texts_without_language(monkeypatch):
     assert res[1].title == "Star Wars: Darth Vader"   # title em lista -> 1º elemento
 
 
+def test_search_with_language_adds_filter(monkeypatch):
+    sc = ArchiveOrgScraper()
+    captured = {}
+
+    def fake(url, params=None, retries=0):
+        captured["q"] = params.get("q")
+        return FakeResp({"response": {"docs": []}})
+
+    monkeypatch.setattr(sc, "make_request", fake)
+    sc.search("Dom Casmurro", language="pt")
+    assert "language:" in captured["q"]
+    assert "portuguese" in captured["q"]
+    # inglês
+    sc.search("Dracula", language="en")
+    assert "english" in captured["q"]
+
+
 def test_get_series_info_filters_only_book_files_and_prefers_pdf(monkeypatch):
     sc = ArchiveOrgScraper()
 

@@ -50,9 +50,9 @@ class Api:
             pass
 
     # --- assíncronos ---
-    def search(self, query: str, media_type: str = "manga") -> Dict[str, str]:
+    def search(self, query: str, media_type: str = "manga", language: str = None) -> Dict[str, str]:
         def fn(bot, emit):
-            results = bot.search_series(query, media_type=media_type)
+            results = bot.search_series(query, media_type=media_type, language=language or None)
             emit("search_results", {"results": results})
             return {"count": len(results)}
         return {"job_id": self._service.submit(f"Busca: {query}", fn)}

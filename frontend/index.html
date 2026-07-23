@@ -64,8 +64,15 @@
             <select id="media-type" title="Tipo de mídia">
               <option>manga</option><option>livro</option><option>hq</option><option>manhwa</option><option>artigo</option>
             </select>
+            <select id="search-lang" title="Idioma (aplica-se a livros/artigos)">
+              <option value="">Qualquer idioma</option>
+              <option value="pt">Português</option>
+              <option value="en">Inglês</option>
+              <option value="es">Espanhol</option>
+            </select>
             <button id="btn-search" class="btn accent">Buscar</button>
           </div>
+          <div class="hint" style="margin-top:10px">O idioma filtra livros/artigos (Archive.org, Gutenberg). Para mangá, o idioma é escolhido depois, ao ver os capítulos.</div>
         </div>
         <div id="search-results" class="card-grid"></div>
       </section>

@@ -116,10 +116,11 @@ class BaseScraper(ABC):
         self.retry_backoff = 2.0  # Backoff exponencial
         
     @abstractmethod
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
-        Pesquisa por título/serie
-        Deve ser implementado por cada scraper específico
+        Pesquisa por título/serie.
+        `language` (opcional): filtra por idioma quando a fonte suportar
+        (ex.: pt/en/es). Scrapers que não usam idioma podem ignorá-lo.
         """
         pass
     

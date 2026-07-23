@@ -28,7 +28,7 @@ class ProjectGutenbergScraper(BaseScraper):
         )
         self.search_url = "https://gutendex.com/books"
     
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
         Pesquisa livros no Project Gutenberg via Gutendex API
         
@@ -45,10 +45,12 @@ class ProjectGutenbergScraper(BaseScraper):
         results = []
         
         try:
-            # Gutendex API parameters
+            # Gutendex API. Idioma escolhido pelo usuário (pt/en/es); sem
+            # escolha, busca amplo (pt,en,es) em vez de travar só em português.
+            lang = (language or '').lower().replace('pt-br', 'pt')
             params = {
                 'search': query,
-                'languages': 'pt',  # Apenas português
+                'languages': lang if lang in ('pt', 'en', 'es') else 'pt,en,es',
                 'sort_by': 'downloads',
             }
             

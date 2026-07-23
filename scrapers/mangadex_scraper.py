@@ -33,7 +33,7 @@ class MangaDexScraper(BaseScraper):
             'Accept': 'application/json',
         })
     
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
         Pesquisa mangás na API MangaDex
         Foca em conteúdo em português brasileiro
