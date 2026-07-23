@@ -13,12 +13,16 @@ from typing import Any, Dict, Optional
 from app.bot_service import BotService
 from app.komga_exporter import KomgaExporter
 from app.metadata_enricher import MetadataEnricher
+from download_queue import DownloadQueue
 
 
 class Api:
     def __init__(self, service: BotService):
         self._service = service
         self._window = None
+        self._queue = DownloadQueue()
+        self._paused = False
+        self._draining = False
 
     def set_window(self, window) -> None:
         self._window = window
@@ -104,3 +108,92 @@ class Api:
     def cancel_job(self, job_id: str) -> Dict[str, bool]:
         self._service.cancel(job_id)
         return {"cancelled": True}
+
+    # --- fila de downloads ---
+    def _emit_queue(self):
+        self.emit_event("queue_update", {"items": self._queue.list_items(), "paused": self._paused})
+
+    def enqueue(self, series, chapters=None, source="mangadex", media_type="manga",
+                language="pt-br", fallback_language=None):
+        ids = self._queue.enqueue(series, chapters, source=source, media_type=media_type,
+                                  language=language, fallback_language=fallback_language)
+        self._emit_queue()
+        self._start_drain()
+        return {"enqueued": len(ids)}
+
+    def _start_drain(self):
+        if self._draining or self._paused:
+            return
+        self._draining = True
+
+        def drain(bot, emit):
+            self._queue.requeue_stale()
+            try:
+                while not self._paused:
+                    item = self._queue.next_queued()
+                    if not item:
+                        break
+                    job_id = item["id"]
+                    self._queue.mark(job_id, "downloading")
+                    emit("queue_update", {"items": self._queue.list_items(), "paused": self._paused})
+
+                    def progress(label, current, total):
+                        emit("progress", {"label": label, "current": current, "total": total})
+
+                    try:
+                        if item["chapter_number"] is None:
+                            summary = bot.download_complete_series(
+                                item["series"], media_type=item["media_type"], source_name=item["source"],
+                                progress_callback=progress, language=item["language"],
+                                fallback_language=item["fallback_language"])
+                            ok = bool(summary and summary.get("downloaded", 0) >= 0 and not summary.get("cancelled"))
+                        else:
+                            ok = bot.download_single_chapter(
+                                item["series"], item["chapter_number"], source_name=item["source"],
+                                media_type=item["media_type"], language=item["language"],
+                                fallback_language=item["fallback_language"], progress_callback=progress)
+                        self._queue.mark(job_id, "done" if ok else "failed",
+                                         None if ok else "download não concluído")
+                    except Exception as exc:  # noqa: BLE001
+                        self._queue.mark(job_id, "failed", str(exc))
+                    emit("queue_update", {"items": self._queue.list_items(), "paused": self._paused})
+            finally:
+                self._draining = False
+            return {"drained": True}
+
+        self._service.submit("Fila de downloads", drain)
+
+    def queue_list(self):
+        return self._service.run_sync("queue_list", lambda bot, emit: self._queue.list_items(), quiet=True)
+
+    def cancel_item(self, job_id):
+        self._queue.cancel_item(job_id)
+        self._emit_queue()
+        return {"ok": True}
+
+    def retry_item(self, job_id):
+        self._queue.retry_item(job_id)
+        self._emit_queue()
+        self._start_drain()
+        return {"ok": True}
+
+    def remove_item(self, job_id):
+        self._queue.remove_item(job_id)
+        self._emit_queue()
+        return {"ok": True}
+
+    def clear_finished(self):
+        self._queue.clear_finished()
+        self._emit_queue()
+        return {"ok": True}
+
+    def pause_queue(self):
+        self._paused = True
+        self._emit_queue()
+        return {"ok": True}
+
+    def resume_queue(self):
+        self._paused = False
+        self._emit_queue()
+        self._start_drain()
+        return {"ok": True}
