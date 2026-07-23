@@ -684,7 +684,6 @@ class MediaBot:
     def cleanup(self):
         """Limpeza final."""
         self.library.cleanup()
-        db_manager.close()
 
     def clear_cache(self) -> int:
         """Remove cache local de consultas e capítulos."""

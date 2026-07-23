@@ -5,9 +5,10 @@ Modela Séries, Volumes, Capítulos e Arquivos baixados.
 """
 
 import os
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Boolean, UniqueConstraint, event
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from pathlib import Path
 
@@ -88,25 +89,69 @@ class MediaFile(Base):
     def __repr__(self):
         return f"<MediaFile(path='{self.file_path}', status='{self.download_status}')>"
 
+class DownloadJob(Base):
+    """Item da fila de downloads (persistente)."""
+    __tablename__ = 'download_jobs'
+
+    id = Column(Integer, primary_key=True)
+    series = Column(String, nullable=False)
+    source = Column(String, default='mangadex')
+    media_type = Column(String, default='manga')
+    chapter_number = Column(Float, nullable=True)  # None = série inteira (faltantes)
+    language = Column(String, default='pt-br')
+    fallback_language = Column(String, nullable=True)
+    status = Column(String, default='queued')  # queued/downloading/done/failed/cancelled
+    error = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<DownloadJob(series='{self.series}', chapter={self.chapter_number}, status='{self.status}')>"
+
+
 class DatabaseManager:
-    """Gerenciador de sessão e inicialização do DB."""
-    
+    """Gerenciador de engine e sessões. Sem sessão global compartilhada."""
+
     def __init__(self, db_path: str = str(DB_PATH)):
-        self.engine = create_engine(f'sqlite:///{db_path}', echo=False)
+        # check_same_thread=False: a fila é mutada pela thread do JS-API enquanto o
+        # worker serial drena — cada session_scope abre sua própria conexão.
+        self.engine = create_engine(
+            f'sqlite:///{db_path}', echo=False,
+            connect_args={"check_same_thread": False},
+        )
+
+        # WAL + busy_timeout reduzem "database is locked" sob acesso concorrente.
+        @event.listens_for(self.engine, "connect")
+        def _set_sqlite_pragma(dbapi_conn, _record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.close()
+
         Base.metadata.create_all(self.engine)
-        SessionLocal = sessionmaker(bind=self.engine)
-        self.session = SessionLocal()
+        self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     def get_session(self):
-        return self.session
+        """Retorna uma NOVA sessão (o chamador é responsável por fechá-la)."""
+        return self.SessionLocal()
 
-    def close(self):
-        self.session.close()
+    @contextmanager
+    def session_scope(self):
+        """Sessão com commit/rollback/close automáticos."""
+        session = self.SessionLocal()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def reset_db(self):
         """CUIDADO: Apaga todo o banco."""
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
 
-# Inicialização singleton para uso global
+
 db_manager = DatabaseManager()
