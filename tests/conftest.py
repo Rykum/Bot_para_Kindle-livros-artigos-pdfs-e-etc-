@@ -12,9 +12,5 @@ def _isolated_db():
     Sem este reset, testes que usam o mesmo título de série (ex.: "Serie")
     poluiriam o estado uns dos outros dentro da mesma sessão de pytest.
     """
-    try:
-        db_manager.session.rollback()
-    except Exception:
-        pass
     db_manager.reset_db()
     yield

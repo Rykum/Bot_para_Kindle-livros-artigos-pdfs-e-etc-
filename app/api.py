@@ -22,6 +22,10 @@ class Api:
         self._service = service
         self._window = None
         self._queue = DownloadQueue()
+        try:
+            self._queue.requeue_stale()
+        except Exception:
+            pass
         self._paused = False
         self._draining = False
         self._drain_lock = threading.Lock()

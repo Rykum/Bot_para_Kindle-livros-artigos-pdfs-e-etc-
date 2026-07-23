@@ -134,6 +134,23 @@ def test_cancel_downloading_item_is_honored():
         service.stop()
 
 
+def test_api_init_requeues_stale_downloading():
+    # Regressao: se o app for morto no meio de um download, a linha fica
+    # com status="downloading" e mostra um badge "ao vivo" enganoso ate o
+    # proximo drain. Api.__init__ deve recolocar esses itens em "queued".
+    queue = DownloadQueue()
+    for it in queue.list_items():
+        queue.remove_item(it["id"])
+    [job_id] = queue.enqueue("Serie Presa", [1.0])
+    queue.mark(job_id, "downloading")
+
+    bot = FakeBot()
+    service = BotService(bot_factory=lambda: bot, event_sink=lambda n, p: None)
+    Api(service)
+
+    assert DownloadQueue().get_status(job_id) == "queued"
+
+
 def test_whole_series_with_failures_marked_failed():
     class PartialFailBot(FakeBot):
         def download_complete_series(self, series, **kwargs):
