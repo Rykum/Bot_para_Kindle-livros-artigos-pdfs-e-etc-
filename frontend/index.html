@@ -30,6 +30,30 @@
         </div>
         <div id="search-results" class="card-grid"></div>
       </section>
+      <section id="view-chapters" class="view">
+        <div class="row-between">
+          <h1 id="chapters-title">Capítulos</h1>
+          <button id="btn-chapters-back" class="btn">← Voltar</button>
+        </div>
+        <div class="form-row">
+          <label title="Idioma principal da busca/download">Idioma
+            <select id="lang-primary"><option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option></select>
+          </label>
+          <label title="Idioma usado só se o capítulo não vier no principal, após esgotar as re-tentativas">Fallback
+            <select id="lang-fallback"><option value="">nenhum</option><option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option></select>
+          </label>
+        </div>
+        <p id="chapters-summary" class="muted">—</p>
+        <div class="form-row">
+          <button id="btn-download-all" class="btn success">Baixar tudo (faltantes)</button>
+          <span class="muted">Intervalo:</span>
+          <input id="range-from" type="number" min="0" style="max-width:90px" placeholder="de" />
+          <input id="range-to" type="number" min="0" style="max-width:90px" placeholder="até" />
+          <button id="btn-range-apply" class="btn">Aplicar</button>
+          <button id="btn-download-selected" class="btn accent" disabled>Baixar selecionados (0)</button>
+        </div>
+        <div id="chapter-grid" class="chapter-grid"></div>
+      </section>
       <!-- Capas: placeholder inline (data-URI SVG, sem CDN) via COVER_PLACEHOLDER em app.js;
            substituído em tempo de execução pela capa real retornada por Api.enrich_metadata. -->
       <section id="view-library" class="view"><h1>Biblioteca</h1><div id="library-cards" class="card-grid"></div></section>

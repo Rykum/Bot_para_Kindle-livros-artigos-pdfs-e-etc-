@@ -46,9 +46,18 @@ on("job_started", (p) => { logEl().textContent += `\n=== ${p.label} ===\n`; });
 on("job_done", (p) => {
   logEl().textContent += `✅ ${p.label} concluído.\n`;
   logEl().scrollTop = logEl().scrollHeight;
-  if (p.job_id && p.job_id === currentDownloadJob) {
-    document.getElementById("progress-text").textContent = "Download concluído.";
+  if (p.job_id === currentDownloadJob) {
+    const r = p.result || {};
+    if (r.cancelled) {
+      document.getElementById("progress-text").textContent = "Download cancelado.";
+      document.getElementById("progress-bar").style.width = "0%";
+    } else if (r.total !== undefined) {
+      const failed = (r.failed_chapters || []).length;
+      document.getElementById("progress-text").textContent =
+        `Download concluído: ${r.downloaded}/${r.total}` + (failed ? ` · ${failed} não vieram: ${r.failed_chapters.join(", ")}` : "");
+    }
     currentDownloadJob = null;
+    if (cancelBtn()) cancelBtn().disabled = false;
   }
 });
 on("job_error", (p) => {
@@ -83,16 +92,96 @@ on("search_results", (p) => {
     div.innerHTML = `<h3>${r.title || r.series_name || "Sem título"}</h3>
       <p class="muted">${r.source || "?"} · ${r.format_type || r.format || "?"}</p>
       <button class="btn success">Baixar série</button>`;
-    div.querySelector("button").addEventListener("click", async () => {
-      const ack = await api().download_series(r.title || r.series_name, mtOf(), r.source || "mangadex");
-      currentDownloadJob = ack && ack.job_id ? ack.job_id : null;
-      goTo("downloads");
-    });
+    div.querySelector("button").addEventListener("click", () => openChapters(r.title || r.series_name, r.source || "mangadex"));
     box.appendChild(div);
   });
 });
 function mtOf() { return document.getElementById("media-type").value; }
-function goTo(view) { document.querySelector(`.nav-item[data-view="${view}"]`).click(); }
+function goTo(view) {
+  const navBtn = document.querySelector(`.nav-item[data-view="${view}"]`);
+  if (navBtn) { navBtn.click(); return; }
+  // Views sem item de navegação (ex.: seletor de capítulos, aberto a partir da busca)
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  document.getElementById("view-" + view).classList.add("active");
+}
+
+// --- seletor de capítulos ---
+let chaptersState = { series: null, source: "mangadex", available: [], downloaded: [], byLang: {} };
+
+function langPrimary() { return document.getElementById("lang-primary").value; }
+function langFallback() { return document.getElementById("lang-fallback").value || null; }
+
+async function openChapters(series, source) {
+  chaptersState.series = series; chaptersState.source = source;
+  document.getElementById("chapters-title").textContent = series;
+  document.getElementById("chapters-summary").textContent = "Carregando capítulos…";
+  document.getElementById("chapter-grid").innerHTML = "";
+  goTo("chapters");
+  await api().list_chapters(series, "manga", source, langPrimary(), langFallback());
+}
+on("chapters_list", (d) => {
+  chaptersState.available = d.available || [];
+  chaptersState.downloaded = d.downloaded || [];
+  chaptersState.byLang = d.by_language || {};
+  const missing = (d.missing || []).length;
+  document.getElementById("chapters-summary").textContent =
+    `${d.available.length} caps · ${d.downloaded.length} baixados · faltam ${missing}`;
+  renderChapterGrid();
+});
+
+function renderChapterGrid() {
+  const grid = document.getElementById("chapter-grid");
+  grid.innerHTML = "";
+  const done = new Set(chaptersState.downloaded);
+  chaptersState.available.forEach((num) => {
+    const isDone = done.has(num);
+    const langs = (chaptersState.byLang[num] || []).join(", ");
+    const chip = document.createElement("label");
+    chip.className = "chapter-chip" + (isDone ? " done" : "");
+    chip.innerHTML = `<input type="checkbox" ${isDone ? "checked disabled" : ""} data-num="${num}"><span>Cap ${num}</span><span class="lang">${langs}</span>`;
+    if (!isDone) chip.querySelector("input").addEventListener("change", updateSelectedCount);
+    grid.appendChild(chip);
+  });
+  updateSelectedCount();
+}
+
+function selectedChapters() {
+  return Array.from(document.querySelectorAll("#chapter-grid input:checked:not([disabled])"))
+    .map((el) => parseFloat(el.dataset.num));
+}
+function updateSelectedCount() {
+  const n = selectedChapters().length;
+  const btn = document.getElementById("btn-download-selected");
+  btn.textContent = `Baixar selecionados (${n})`;
+  btn.disabled = n === 0;  // Nielsen #5: prevenção de erro
+}
+
+document.getElementById("btn-range-apply").addEventListener("click", () => {
+  let from = parseFloat(document.getElementById("range-from").value);
+  let to = parseFloat(document.getElementById("range-to").value);
+  if (isNaN(from) || isNaN(to)) return;
+  if (from > to) { const t = from; from = to; to = t; }  // corrige de>até
+  document.querySelectorAll("#chapter-grid input:not([disabled])").forEach((el) => {
+    const num = parseFloat(el.dataset.num);
+    el.checked = num >= from && num <= to;
+  });
+  updateSelectedCount();
+});
+
+function startDownload(chapters) {
+  document.getElementById("progress-bar").style.width = "0%";
+  document.getElementById("progress-text").textContent = "Iniciando…";
+  if (cancelBtn()) cancelBtn().disabled = false;
+  api().download_series(chaptersState.series, "manga", chaptersState.source, chapters, langPrimary(), langFallback())
+    .then((ack) => { currentDownloadJob = ack && ack.job_id; });
+  goTo("downloads");
+}
+document.getElementById("btn-download-all").addEventListener("click", () => startDownload(null));
+document.getElementById("btn-download-selected").addEventListener("click", () => {
+  const sel = selectedChapters();
+  if (sel.length) startDownload(sel);
+});
+document.getElementById("btn-chapters-back").addEventListener("click", () => goTo("search"));
 
 // --- biblioteca ---
 async function loadLibrary() {
@@ -158,10 +247,17 @@ document.getElementById("btn-cache").addEventListener("click", async () => {
   alert(`Cache removido: ${r.removed} arquivo(s)`);
 });
 document.getElementById("btn-graph").addEventListener("click", () => { api().graph_status(); goTo("downloads"); });
-document.getElementById("btn-cancel").addEventListener("click", () => {
-  if (!currentDownloadJob) return;
-  api().cancel_job(currentDownloadJob);
-});
+
+// --- cancelar download (feedback imediato + reset em job_done) ---
+const cancelBtn = () => document.getElementById("btn-cancel");
+if (cancelBtn()) {
+  cancelBtn().addEventListener("click", () => {
+    if (!currentDownloadJob) return;
+    api().cancel_job(currentDownloadJob);
+    document.getElementById("progress-text").textContent = "Cancelando…";
+    cancelBtn().disabled = true;  // feedback imediato
+  });
+}
 
 // --- init ---
 window.addEventListener("pywebviewready", () => {
