@@ -6,6 +6,11 @@ cache/
 downloads/
 graphify-out/
 
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
 # Environment variables
 .env
 .env.local
