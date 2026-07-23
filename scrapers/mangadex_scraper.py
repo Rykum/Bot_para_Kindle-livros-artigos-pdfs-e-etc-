@@ -167,6 +167,9 @@ class MangaDexScraper(BaseScraper):
                     'volume': float(volume_num) if volume_num else None,
                     'title': chap_attrs.get('title'),
                     'chapter_id': chapter.get('id'),
+                    # Capítulos externos (externalUrl) não têm páginas no MangaDex.
+                    'pages': chap_attrs.get('pages') or 0,
+                    'external': bool(chap_attrs.get('externalUrl')),
                 })
             
             # Determinar primeiro e último volume/capítulo
@@ -251,46 +254,58 @@ class MangaDexScraper(BaseScraper):
         return page_urls
 
     def get_chapter_url(self, series_identifier: str, chapter_number: float, language: str = "pt-br") -> Optional[Dict]:
-        """Resolves a chapter into page URLs that can be packed into a CBZ."""
+        """Resolve um capítulo em URLs de página para empacotar num CBZ.
+
+        Um mesmo número de capítulo pode ter VÁRIAS versões (grupos de scan
+        diferentes) e algumas são "externas" (externalUrl) — hospedadas fora do
+        MangaDex, sem páginas baixáveis. Aqui tentamos as versões baixáveis (não
+        externas, com mais páginas) até uma render páginas de verdade.
+        """
         series_info = self.get_series_info(series_identifier, language=language)
         if not series_info:
             return None
 
-        matched_chapter = None
+        # Todas as versões deste número de capítulo.
+        candidates = []
         for item in series_info.get('available_chapters', []):
             try:
                 item_chapter = item.get('chapter')
                 if item_chapter is not None and float(item_chapter) == float(chapter_number):
-                    matched_chapter = item
-                    break
+                    candidates.append(item)
             except (TypeError, ValueError):
                 continue
 
-        if not matched_chapter:
+        if not candidates:
             return None
 
-        chapter_id = matched_chapter.get('chapter_id')
-        if not chapter_id:
-            return None
+        # Prioriza baixáveis: não-externas primeiro, depois mais páginas.
+        candidates.sort(key=lambda it: (0 if it.get('external') else 1, it.get('pages') or 0),
+                        reverse=True)
 
-        chapter_info = self.get_chapter_download_url(chapter_id)
-        if not chapter_info:
-            return None
+        for cand in candidates:
+            if cand.get('external'):
+                continue  # externo não tem páginas no MangaDex
+            chapter_id = cand.get('chapter_id')
+            if not chapter_id:
+                continue
+            chapter_info = self.get_chapter_download_url(chapter_id)
+            if not chapter_info:
+                continue
+            page_urls = self.build_page_urls(chapter_info)
+            if not page_urls:
+                continue  # versão sem páginas — tenta a próxima
+            return {
+                'chapter_id': chapter_id,
+                'title': cand.get('title') or f'Capítulo {chapter_number}',
+                'volume': cand.get('volume') or 1,
+                'chapter': float(chapter_number),
+                'format': 'cbz',
+                'download_type': 'mangadex_cbz',
+                'page_urls': page_urls,
+                'page_count': len(page_urls),
+            }
 
-        page_urls = self.build_page_urls(chapter_info)
-        if not page_urls:
-            return None
-
-        return {
-            'chapter_id': chapter_id,
-            'title': matched_chapter.get('title') or f'Capítulo {chapter_number}',
-            'volume': matched_chapter.get('volume') or 1,
-            'chapter': float(chapter_number),
-            'format': 'cbz',
-            'download_type': 'mangadex_cbz',
-            'page_urls': page_urls,
-            'page_count': len(page_urls),
-        }
+        return None
 
     def fetch_page(self, page_url: str, should_cancel=None, max_attempts: int = 3):
         """Baixa uma página com retry local. Retorna bytes ou levanta a última exceção."""
