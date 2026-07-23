@@ -52,6 +52,11 @@ class DownloadQueue:
                 job.status = status
                 job.error = error
 
+    def get_status(self, job_id: int) -> Optional[str]:
+        with db_manager.session_scope() as s:
+            job = s.get(DownloadJob, job_id)
+            return job.status if job else None
+
     def cancel_item(self, job_id: int) -> None:
         self.mark(job_id, "cancelled")
 

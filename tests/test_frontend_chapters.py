@@ -16,9 +16,6 @@ def test_appjs_wires_chapters_and_cancel_reset():
     js = (FRONT / "app.js").read_text(encoding="utf-8")
     assert "list_chapters" in js
     assert "chapters_list" in js
-    # cancelar dá feedback e reseta estado
-    assert "Cancelando" in js
-    assert "result.cancelled" in js or "p.result" in js
     # validação de erro-prevenção: baixar selecionados desabilitado sem seleção
     assert "btn-download-selected" in js
     # bridge intacta

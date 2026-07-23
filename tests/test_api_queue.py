@@ -96,6 +96,44 @@ def test_item_enqueued_during_drain_exit_is_not_stranded():
         service.stop()
 
 
+def test_cancel_downloading_item_is_honored():
+    # Regressao: cancelar um item que ja esta "downloading" precisa
+    # efetivamente interromper o download (via should_cancel) e o
+    # resultado final deve permanecer "cancelled" - nunca ser sobrescrito
+    # de volta para "done"/"failed" pelo laco do drain.
+    captured = {}
+
+    class SelfCancelBot(FakeBot):
+        def __init__(self, queue):
+            super().__init__()
+            self.queue = queue
+
+        def download_single_chapter(self, series, chapter_num, should_cancel=None, **kwargs):
+            captured["callable"] = callable(should_cancel)
+            job = self.queue.list_items()[0]
+            # simula um cancel chegando enquanto o download esta em andamento
+            self.queue.cancel_item(job["id"])
+            captured["should_cancel_result"] = should_cancel() if should_cancel else None
+            return False  # download interrompido por should_cancel
+
+    queue = DownloadQueue()
+    for it in queue.list_items():
+        queue.remove_item(it["id"])
+    events, bot = [], SelfCancelBot(queue)
+    api, service = make_api(events, bot)
+    try:
+        ack = api.enqueue("Serie Cancelada", [1.0])
+        assert ack["enqueued"] == 1
+        _wait(lambda: captured.get("should_cancel_result") is not None)
+        assert captured.get("callable") is True
+        assert captured.get("should_cancel_result") is True
+        _wait(lambda: queue.list_items() and queue.list_items()[0]["status"] != "downloading")
+        items = queue.list_items()
+        assert items and items[0]["status"] == "cancelled"
+    finally:
+        service.stop()
+
+
 def test_whole_series_with_failures_marked_failed():
     class PartialFailBot(FakeBot):
         def download_complete_series(self, series, **kwargs):

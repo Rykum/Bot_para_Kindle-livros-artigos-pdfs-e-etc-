@@ -143,22 +143,27 @@ class Api:
                     def progress(label, current, total):
                         emit("progress", {"label": label, "current": current, "total": total})
 
+                    should_cancel = lambda: self._queue.get_status(job_id) == "cancelled"
                     try:
                         if item["chapter_number"] is None:
                             summary = bot.download_complete_series(
                                 item["series"], media_type=item["media_type"], source_name=item["source"],
-                                progress_callback=progress, language=item["language"],
+                                progress_callback=progress, should_cancel=should_cancel,
+                                language=item["language"],
                                 fallback_language=item["fallback_language"])
                             ok = bool(summary) and not summary.get("cancelled") and not summary.get("failed_chapters")
                         else:
                             ok = bot.download_single_chapter(
                                 item["series"], item["chapter_number"], source_name=item["source"],
                                 media_type=item["media_type"], language=item["language"],
-                                fallback_language=item["fallback_language"], progress_callback=progress)
-                        self._queue.mark(job_id, "done" if ok else "failed",
-                                         None if ok else "download não concluído")
+                                fallback_language=item["fallback_language"], progress_callback=progress,
+                                should_cancel=should_cancel)
+                        if self._queue.get_status(job_id) != "cancelled":
+                            self._queue.mark(job_id, "done" if ok else "failed",
+                                             None if ok else "download não concluído")
                     except Exception as exc:  # noqa: BLE001
-                        self._queue.mark(job_id, "failed", str(exc))
+                        if self._queue.get_status(job_id) != "cancelled":
+                            self._queue.mark(job_id, "failed", str(exc))
                     emit("queue_update", {"items": self._queue.list_items(), "paused": self._paused})
             finally:
                 with self._drain_lock:

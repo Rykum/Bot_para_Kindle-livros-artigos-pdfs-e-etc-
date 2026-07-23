@@ -20,8 +20,6 @@ function api() {
   return window.pywebview && window.pywebview.api;
 }
 
-// --- download em andamento (para o botão Cancelar) ---
-let currentDownloadJob = null;
 // --- job de listagem de capítulos em andamento (para tratar erro no seletor) ---
 let currentChaptersJob = null;
 
@@ -49,29 +47,11 @@ on("job_started", (p) => { logEl().textContent += `\n=== ${p.label} ===\n`; });
 on("job_done", (p) => {
   logEl().textContent += `✅ ${p.label} concluído.\n`;
   logEl().scrollTop = logEl().scrollHeight;
-  if (p.job_id === currentDownloadJob) {
-    const r = p.result || {};
-    if (r.cancelled) {
-      document.getElementById("progress-text").textContent = "Download cancelado.";
-      document.getElementById("progress-bar").style.width = "0%";
-    } else if (r.total !== undefined) {
-      const failed = (r.failed_chapters || []).length;
-      document.getElementById("progress-text").textContent =
-        `Download concluído: ${r.downloaded}/${r.total}` + (failed ? ` · ${failed} não vieram: ${r.failed_chapters.join(", ")}` : "");
-    }
-    currentDownloadJob = null;
-    if (cancelBtn()) cancelBtn().disabled = false;
-  }
 });
 // #9 Recuperação: erro amigável
 on("job_error", (p) => {
   logEl().textContent += `⚠️ ${p.label}: ${p.error}\n`;
   logEl().scrollTop = logEl().scrollHeight;
-  if (p.job_id === currentDownloadJob) {
-    document.getElementById("progress-text").textContent = "Falhou — tente novamente.";
-    currentDownloadJob = null;
-    if (cancelBtn()) cancelBtn().disabled = false;
-  }
   if (p.job_id === currentChaptersJob) {
     document.getElementById("chapters-summary").textContent =
       "Falha ao carregar capítulos — verifique a conexão e tente novamente.";
@@ -208,6 +188,10 @@ on("queue_update", (p) => renderQueue((p && p.items) || []));
 function renderQueue(items) {
   const box = document.getElementById("queue-list");
   if (!box) return;
+  if (!items.some((i) => i.status === "downloading")) {
+    document.getElementById("progress-text").textContent = "Sem download em andamento.";
+    document.getElementById("progress-bar").style.width = "0%";
+  }
   const counts = items.reduce((a, i) => { a[i.status] = (a[i.status] || 0) + 1; return a; }, {});
   const cEl = document.getElementById("queue-counts");
   if (cEl) cEl.textContent =
@@ -335,17 +319,6 @@ function restorePrefs() {
   const el = document.getElementById(id);
   if (el) el.addEventListener("change", persistPrefs);
 });
-
-// --- cancelar download (feedback imediato + reset em job_done) ---
-const cancelBtn = () => document.getElementById("btn-cancel");
-if (cancelBtn()) {
-  cancelBtn().addEventListener("click", () => {
-    if (!currentDownloadJob) return;
-    api().cancel_job(currentDownloadJob);
-    document.getElementById("progress-text").textContent = "Cancelando…";
-    cancelBtn().disabled = true;  // feedback imediato
-  });
-}
 
 // --- init ---
 window.addEventListener("pywebviewready", () => {
