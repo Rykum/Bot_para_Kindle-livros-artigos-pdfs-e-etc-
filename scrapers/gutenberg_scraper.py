@@ -129,14 +129,15 @@ class ProjectGutenbergScraper(BaseScraper):
         
         return results
     
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas de um livro
         Para Gutenberg, cada livro é geralmente uma obra única
-        
+
         Args:
             series_url: URL do livro no formato https://www.gutenberg.org/ebooks/{id}
-        
+            language: não aplicável ao Gutenberg, mantido por compatibilidade de assinatura
+
         Returns:
             Dict com informações do livro
         """

@@ -96,14 +96,15 @@ class MangaDexScraper(BaseScraper):
         
         return results
     
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas da série
         Inclui lista de capítulos, volumes e último lançamento
-        
+
         Args:
             series_url: URL da série no formato https://mangadex.org/title/{id}
-        
+            language: idioma traduzido desejado para o feed de capítulos
+
         Returns:
             Dict com informações da série
         """
@@ -125,7 +126,7 @@ class MangaDexScraper(BaseScraper):
             # Obter capítulos
             chapters_url = f"{self.base_url}/manga/{manga_id}/feed"
             params = {
-                'translatedLanguage[]': ['pt-br'],
+                'translatedLanguage[]': [language],
                 'order[volume]': 'asc',
                 'order[chapter]': 'asc',
                 'limit': 500,  # Máximo permitido
@@ -174,7 +175,7 @@ class MangaDexScraper(BaseScraper):
                 'total_volumes': len(volumes),
                 'total_chapters': total_chapters,
                 'available_chapters': available_chapters,
-                'language': 'pt-br',
+                'language': language,
                 'url': series_url
             }
             
@@ -239,9 +240,9 @@ class MangaDexScraper(BaseScraper):
         
         return page_urls
 
-    def get_chapter_url(self, series_identifier: str, chapter_number: float) -> Optional[Dict]:
+    def get_chapter_url(self, series_identifier: str, chapter_number: float, language: str = "pt-br") -> Optional[Dict]:
         """Resolves a chapter into page URLs that can be packed into a CBZ."""
-        series_info = self.get_series_info(series_identifier)
+        series_info = self.get_series_info(series_identifier, language=language)
         if not series_info:
             return None
 
@@ -280,3 +281,19 @@ class MangaDexScraper(BaseScraper):
             'page_urls': page_urls,
             'page_count': len(page_urls),
         }
+
+    def fetch_page(self, page_url: str, should_cancel=None, max_attempts: int = 3):
+        """Baixa uma página com retry local. Retorna bytes ou levanta a última exceção."""
+        import time
+        last_error = None
+        for attempt in range(max_attempts):
+            if should_cancel is not None and should_cancel():
+                raise RuntimeError("cancelled")
+            try:
+                response = self.session.get(page_url, timeout=60)
+                response.raise_for_status()
+                return response.content
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                time.sleep(1.5 ** attempt)
+        raise last_error if last_error else RuntimeError("falha ao baixar página")

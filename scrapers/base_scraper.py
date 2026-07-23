@@ -99,7 +99,7 @@ class BaseScraper(ABC):
         pass
     
     @abstractmethod
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações da série (último volume, total de capítulos, etc)
         Deve ser implementado por cada scraper específico
@@ -205,9 +205,9 @@ class BaseScraper(ABC):
             logger.debug(f"Não foi possível obter tamanho do arquivo: {e}")
         return None
 
-    def get_all_chapters(self, series_identifier: str) -> List[float]:
+    def get_all_chapters(self, series_identifier: str, language: str = "pt-br") -> List[float]:
         """Retorna a lista normalizada de capítulos disponíveis para uma série."""
-        series_info = self.get_series_info(series_identifier)
+        series_info = self.get_series_info(series_identifier, language=language)
         if not series_info:
             return []
 
@@ -243,9 +243,9 @@ class BaseScraper(ABC):
 
         return []
 
-    def get_chapter_url(self, series_identifier: str, chapter_number: float) -> Optional[Dict[str, Any]]:
+    def get_chapter_url(self, series_identifier: str, chapter_number: float, language: str = "pt-br") -> Optional[Dict[str, Any]]:
         """Tenta resolver a URL de download direta de um capítulo ou item."""
-        series_info = self.get_series_info(series_identifier)
+        series_info = self.get_series_info(series_identifier, language=language)
         if not series_info:
             return None
 

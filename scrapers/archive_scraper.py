@@ -132,14 +132,15 @@ class ArchiveOrgScraper(BaseScraper):
         
         return 'unknown'
     
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas de um item
         Inclui lista de arquivos disponíveis para download
-        
+
         Args:
             series_url: URL do item no formato https://archive.org/details/{identifier}
-        
+            language: não aplicável ao Archive.org, mantido por compatibilidade de assinatura
+
         Returns:
             Dict com informações do item e arquivos disponíveis
         """
