@@ -10,6 +10,7 @@ Fluxo: Search -> Filter -> DB Check -> Download -> Register
 
 import os
 import re
+import time
 import argparse
 import json
 from collections.abc import Mapping
@@ -224,7 +225,7 @@ class MediaBot:
         Retorna lista ordenada de números de capítulos.
         """
         print(f"\n📋 Verificando capítulos disponíveis para '{series_title}'...")
-        cache_key = f"chapters::{series_title.strip().lower()}::{source_name.strip().lower()}"
+        cache_key = f"chapters::{series_title.strip().lower()}::{source_name.strip().lower()}::{language}"
         cached_chapters = self.cache.get(cache_key, max_age_seconds=6 * 3600)
         if cached_chapters is not None:
             print("   💾 Capítulos recuperados do cache.")
@@ -440,6 +441,11 @@ class MediaBot:
                         break
                     else:
                         still_failed.append(chapter_num)
+                    # Pausa curta e cancel-responsiva entre capítulos (evita 429s).
+                    for _ in range(5):
+                        if should_cancel is not None and should_cancel():
+                            break
+                        time.sleep(0.2)
                 if cancelled or not still_failed:
                     pending = still_failed
                     break

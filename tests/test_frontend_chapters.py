@@ -35,6 +35,11 @@ def test_styles_has_chapter_grid():
     assert "chapter" in css.lower()
 
 
+def test_appjs_tracks_chapters_job_for_error_handling():
+    js = (FRONT / "app.js").read_text(encoding="utf-8")
+    assert "currentChaptersJob" in js
+
+
 def test_appjs_has_nielsen_safeguards():
     js = (FRONT / "app.js").read_text(encoding="utf-8")
     # #5 prevenção: confirmação ao limpar cache

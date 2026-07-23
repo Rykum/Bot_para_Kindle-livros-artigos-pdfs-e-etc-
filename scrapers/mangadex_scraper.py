@@ -290,6 +290,7 @@ class MangaDexScraper(BaseScraper):
             if should_cancel is not None and should_cancel():
                 raise RuntimeError("cancelled")
             try:
+                self.rate_limiter.wait(page_url)
                 response = self.session.get(page_url, timeout=60)
                 response.raise_for_status()
                 return response.content

@@ -22,6 +22,8 @@ function api() {
 
 // --- download em andamento (para o botão Cancelar) ---
 let currentDownloadJob = null;
+// --- job de listagem de capítulos em andamento (para tratar erro no seletor) ---
+let currentChaptersJob = null;
 
 // --- navegação ---
 document.querySelectorAll(".nav-item").forEach((btn) => {
@@ -68,6 +70,11 @@ on("job_error", (p) => {
     document.getElementById("progress-text").textContent = "Falhou — tente novamente.";
     currentDownloadJob = null;
     if (cancelBtn()) cancelBtn().disabled = false;
+  }
+  if (p.job_id === currentChaptersJob) {
+    document.getElementById("chapters-summary").textContent =
+      "Falha ao carregar capítulos — verifique a conexão e tente novamente.";
+    currentChaptersJob = null;
   }
 });
 
@@ -125,7 +132,8 @@ async function openChapters(series, source, media) {
   document.getElementById("chapters-summary").textContent = "Carregando capítulos…";
   document.getElementById("chapter-grid").innerHTML = "";
   goTo("chapters");
-  await api().list_chapters(series, chaptersState.media, source, langPrimary(), langFallback());
+  await api().list_chapters(series, chaptersState.media, source, langPrimary(), langFallback())
+    .then((ack) => { currentChaptersJob = ack && ack.job_id; });
 }
 on("chapters_list", (d) => {
   chaptersState.available = d.available || [];
