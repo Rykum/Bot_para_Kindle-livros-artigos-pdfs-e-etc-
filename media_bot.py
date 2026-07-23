@@ -133,6 +133,22 @@ class MediaBot:
     def _sanitize_filename(self, value: str) -> str:
         return re.sub(r'[<>:\"/\\|?*]+', '_', value).strip().strip('.')
 
+    def _resolve_file_extension(self, chapter_data: Dict[str, Any]) -> str:
+        """Extensão do arquivo para downloads diretos (não assume cbz).
+
+        Usa o 'format' informado pelo scraper; se ausente/desconhecido, deriva
+        da extensão da própria URL (pdf, epub, cbz, cbr, mobi, ...).
+        """
+        fmt = (chapter_data.get('format') or chapter_data.get('format_type') or '').strip().lower()
+        known = {'pdf', 'epub', 'cbz', 'cbr', 'mobi', 'txt', 'zip', 'rar', 'azw3'}
+        if fmt and fmt != 'unknown':
+            return fmt
+        url = chapter_data.get('download_url') or ''
+        suffix = Path(urlparse(url).path).suffix.lstrip('.').lower()
+        if suffix in known:
+            return suffix
+        return suffix or 'bin'
+
     def _format_chapter_label(self, chapter_number: float) -> str:
         try:
             if float(chapter_number).is_integer():
@@ -328,10 +344,11 @@ class MediaBot:
                     print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
                     return "fail"
             else:
-                # Executa download real
+                # Download direto (PDF, EPUB, CBZ, CBR, ...): usa a extensão real.
+                extension = self._resolve_file_extension(chapter_data)
                 result = self.downloader.download(
                     url=chapter_data['download_url'],
-                    filename=f"{self._sanitize_filename(series_title)}_cap_{chapter_label}.{chapter_data.get('format', 'cbz')}",
+                    filename=f"{self._sanitize_filename(series_title)}_cap_{chapter_label}.{extension}",
                     metadata={
                         'series': series_title,
                         'chapter': chapter_num,

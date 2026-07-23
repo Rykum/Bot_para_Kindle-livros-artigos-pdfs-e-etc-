@@ -164,6 +164,15 @@ function updateSelectedCount() {
   btn.disabled = n === 0;  // Nielsen #5: prevenção de erro
 }
 
+document.getElementById("btn-range-help").addEventListener("click", () => {
+  alert(
+    "Intervalo de capítulos\n\n" +
+    'Marca automaticamente todos os capítulos de um número inicial ("de") até um final ("até").\n\n' +
+    'Exemplo: de 1 até 50 seleciona os capítulos 1 a 50 — depois clique em "Baixar selecionados".\n\n' +
+    'Você também pode marcar/desmarcar manualmente nas caixas abaixo, ou usar "Baixar tudo (faltantes)" ' +
+    "para pegar todos os que ainda faltam."
+  );
+});
 document.getElementById("btn-range-apply").addEventListener("click", () => {
   let from = parseFloat(document.getElementById("range-from").value);
   let to = parseFloat(document.getElementById("range-to").value);

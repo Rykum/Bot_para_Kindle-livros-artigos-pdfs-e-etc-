@@ -32,6 +32,12 @@ class Api:
 
     def set_window(self, window) -> None:
         self._window = window
+        # Retoma a fila persistente assim que a GUI está pronta: itens que
+        # ficaram "queued" de uma sessão anterior voltam a ser processados.
+        try:
+            self._start_drain()
+        except Exception:
+            pass
 
     # event_sink do BotService
     def emit_event(self, name: str, payload: dict) -> None:
