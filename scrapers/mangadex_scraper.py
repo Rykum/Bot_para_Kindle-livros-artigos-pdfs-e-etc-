@@ -7,6 +7,7 @@ Documentação: https://api.mangadex.org/docs.html
 """
 
 import logging
+import requests
 from typing import List, Dict, Optional
 from .base_scraper import BaseScraper, ScrapedResult
 
@@ -32,7 +33,7 @@ class MangaDexScraper(BaseScraper):
             'Accept': 'application/json',
         })
     
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
         Pesquisa mangás na API MangaDex
         Foca em conteúdo em português brasileiro
@@ -51,7 +52,6 @@ class MangaDexScraper(BaseScraper):
             search_url = f"{self.base_url}/manga"
             params = {
                 'title': query,
-                'translatedLanguage[]': ['pt-br'],  # Apenas português brasileiro
                 'includes[]': ['cover_art'],  # Incluir arte da capa
                 'limit': 20,
                 'offset': 0
@@ -97,14 +97,15 @@ class MangaDexScraper(BaseScraper):
         
         return results
     
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas da série
         Inclui lista de capítulos, volumes e último lançamento
-        
+
         Args:
             series_url: URL da série no formato https://mangadex.org/title/{id}
-        
+            language: idioma traduzido desejado para o feed de capítulos
+
         Returns:
             Dict com informações da série
         """
@@ -123,23 +124,32 @@ class MangaDexScraper(BaseScraper):
             manga_data = response.json().get('data', {})
             attributes = manga_data.get('attributes', {})
             
-            # Obter capítulos
+            # Obter TODOS os capítulos (paginado — feed limita a 500 por página).
             chapters_url = f"{self.base_url}/manga/{manga_id}/feed"
-            params = {
-                'translatedLanguage[]': ['pt-br'],
-                'order[volume]': 'asc',
-                'order[chapter]': 'asc',
-                'limit': 500,  # Máximo permitido
-                'includes[]': ['scanlation_group']
-            }
-            
-            chapters_response = self.make_request(chapters_url, params=params)
             chapters_data = []
-            
-            if chapters_response:
+            offset = 0
+            page_size = 500
+            while True:
+                params = {
+                    'translatedLanguage[]': [language],
+                    'order[volume]': 'asc',
+                    'order[chapter]': 'asc',
+                    'limit': page_size,
+                    'offset': offset,
+                    'includes[]': ['scanlation_group'],
+                }
+                chapters_response = self.make_request(chapters_url, params=params)
+                if not chapters_response:
+                    break
                 chapters_json = chapters_response.json()
-                chapters_data = chapters_json.get('data', [])
-            
+                batch = chapters_json.get('data', [])
+                chapters_data.extend(batch)
+                total = chapters_json.get('total', 0)
+                offset += len(batch)
+                # Para quando não veio página cheia ou já cobriu o total.
+                if len(batch) < page_size or (total and offset >= total):
+                    break
+
             # Processar capítulos para encontrar volumes/capítulos disponíveis
             available_chapters = []
             volumes = set()
@@ -157,6 +167,10 @@ class MangaDexScraper(BaseScraper):
                     'volume': float(volume_num) if volume_num else None,
                     'title': chap_attrs.get('title'),
                     'chapter_id': chapter.get('id'),
+                    # Capítulos externos (externalUrl) não têm páginas no MangaDex.
+                    'pages': chap_attrs.get('pages') or 0,
+                    'external': bool(chap_attrs.get('externalUrl')),
+                    'external_url': chap_attrs.get('externalUrl'),
                 })
             
             # Determinar primeiro e último volume/capítulo
@@ -175,7 +189,7 @@ class MangaDexScraper(BaseScraper):
                 'total_volumes': len(volumes),
                 'total_chapters': total_chapters,
                 'available_chapters': available_chapters,
-                'language': 'pt-br',
+                'language': language,
                 'url': series_url
             }
             
@@ -239,3 +253,104 @@ class MangaDexScraper(BaseScraper):
             page_urls.append(page_url)
         
         return page_urls
+
+    def get_chapter_url(self, series_identifier: str, chapter_number: float, language: str = "pt-br") -> Optional[Dict]:
+        """Resolve um capítulo em URLs de página para empacotar num CBZ.
+
+        Um mesmo número de capítulo pode ter VÁRIAS versões (grupos de scan
+        diferentes) e algumas são "externas" (externalUrl) — hospedadas fora do
+        MangaDex, sem páginas baixáveis. Aqui tentamos as versões baixáveis (não
+        externas, com mais páginas) até uma render páginas de verdade.
+        """
+        series_info = self.get_series_info(series_identifier, language=language)
+        if not series_info:
+            return None
+
+        # Todas as versões deste número de capítulo.
+        candidates = []
+        for item in series_info.get('available_chapters', []):
+            try:
+                item_chapter = item.get('chapter')
+                if item_chapter is not None and float(item_chapter) == float(chapter_number):
+                    candidates.append(item)
+            except (TypeError, ValueError):
+                continue
+
+        if not candidates:
+            return None
+
+        # Prioriza baixáveis: não-externas primeiro, depois mais páginas.
+        candidates.sort(key=lambda it: (0 if it.get('external') else 1, it.get('pages') or 0),
+                        reverse=True)
+
+        for cand in candidates:
+            if cand.get('external'):
+                continue  # externo não tem páginas no MangaDex
+            chapter_id = cand.get('chapter_id')
+            if not chapter_id:
+                continue
+            chapter_info = self.get_chapter_download_url(chapter_id)
+            if not chapter_info:
+                continue
+            page_urls = self.build_page_urls(chapter_info)
+            if not page_urls:
+                continue  # versão sem páginas — tenta a próxima
+            return {
+                'chapter_id': chapter_id,
+                'title': cand.get('title') or f'Capítulo {chapter_number}',
+                'volume': cand.get('volume') or 1,
+                'chapter': float(chapter_number),
+                'format': 'cbz',
+                'download_type': 'mangadex_cbz',
+                'page_urls': page_urls,
+                'page_count': len(page_urls),
+            }
+
+        # Nenhuma versão baixável. Se só existir versão externa/oficial, informa.
+        externals = [c for c in candidates if c.get('external') and c.get('external_url')]
+        if externals:
+            return {
+                'download_type': 'external_only',
+                'external_url': externals[0]['external_url'],
+                'chapter': float(chapter_number),
+            }
+        return None
+
+    def fetch_page(self, page_url: str, should_cancel=None, max_attempts: int = 3):
+        """Baixa uma página com retry local. Retorna bytes ou levanta a última exceção."""
+        import time
+        last_error = None
+        for attempt in range(max_attempts):
+            if should_cancel is not None and should_cancel():
+                raise RuntimeError("cancelled")
+            try:
+                self.rate_limiter.wait(page_url)
+                response = self.session.get(page_url, timeout=60)
+                if response.status_code == 429:
+                    retry_after = response.headers.get('Retry-After')
+                    try:
+                        wait_time = float(retry_after) if retry_after is not None else 1.5 ** attempt
+                    except (TypeError, ValueError):
+                        wait_time = 1.5 ** attempt
+                    time.sleep(wait_time)
+                    continue
+                response.raise_for_status()
+                return response.content
+            except requests.exceptions.HTTPError as exc:
+                last_error = exc
+                # URLs expiradas não adiantam re-tentar: propaga para re-resolução
+                status = getattr(exc.response, 'status_code', None)
+                if status in (403, 404, 410):
+                    raise
+                time.sleep(1.5 ** attempt)
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                time.sleep(1.5 ** attempt)
+        raise last_error if last_error else RuntimeError("falha ao baixar página")
+
+    def reresolve_pages(self, chapter_id: str):
+        try:
+            info = self.get_chapter_download_url(chapter_id)
+            return self.build_page_urls(info) if info else []
+        except Exception:
+            return []

@@ -42,9 +42,11 @@ class ScrapedResult:
 
 
 class RateLimiter:
-    """Rate limiter inteligente por domínio"""
-    
-    def __init__(self):
+    """Rate limiter por domínio: delay mínimo + token-bucket por janela."""
+
+    def __init__(self, time_fn=time.time, sleep_fn=time.sleep):
+        self._time = time_fn
+        self._sleep = sleep_fn
         self.domains = {}  # domain -> last_request_time
         self.delays = {
             'default': 1.0,
@@ -53,20 +55,43 @@ class RateLimiter:
             'gutenberg.org': 2.0,
             'nyaa.si': 3.0,
         }
-    
+        self._hits = {}  # host -> list[timestamp]
+
+    def _window_for(self, host: str):
+        if host == 'api.mangadex.org':
+            return (5, 1.0)
+        if host.endswith('mangadex.network'):
+            return (40, 60.0)
+        return None
+
     def wait(self, url: str):
         """Espera o tempo necessário antes de fazer requisição"""
         domain = urlparse(url).netloc
+
+        # 1) delay mínimo fixo por domínio (comportamento existente)
         delay = self.delays.get(domain, self.delays['default'])
-        
         if domain in self.domains:
-            elapsed = time.time() - self.domains[domain]
+            elapsed = self._time() - self.domains[domain]
             if elapsed < delay:
                 sleep_time = delay - elapsed
                 logger.debug(f"Rate limit: aguardando {sleep_time:.2f}s para {domain}")
-                time.sleep(sleep_time)
-        
-        self.domains[domain] = time.time()
+                self._sleep(sleep_time)
+        self.domains[domain] = self._time()
+
+        # 2) token-bucket por janela para hosts com limite conhecido
+        window = self._window_for(domain)
+        if window:
+            max_req, seconds = window
+            hits = self._hits.setdefault(domain, [])
+            now = self._time()
+            hits[:] = [t for t in hits if now - t < seconds]
+            if len(hits) >= max_req:
+                sleep_for = seconds - (now - hits[0])
+                if sleep_for > 0:
+                    self._sleep(sleep_for)
+                now = self._time()
+                hits[:] = [t for t in hits if now - t < seconds]
+            hits.append(self._time())
 
 
 class BaseScraper(ABC):
@@ -91,15 +116,16 @@ class BaseScraper(ABC):
         self.retry_backoff = 2.0  # Backoff exponencial
         
     @abstractmethod
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
-        Pesquisa por título/serie
-        Deve ser implementado por cada scraper específico
+        Pesquisa por título/serie.
+        `language` (opcional): filtra por idioma quando a fonte suportar
+        (ex.: pt/en/es). Scrapers que não usam idioma podem ignorá-lo.
         """
         pass
     
     @abstractmethod
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações da série (último volume, total de capítulos, etc)
         Deve ser implementado por cada scraper específico
@@ -113,11 +139,22 @@ class BaseScraper(ABC):
         try:
             # Aplicar rate limiting
             self.rate_limiter.wait(url)
-            
+
             response = self.session.get(url, params=params, timeout=self.timeout)
+
+            if response.status_code == 429 and retries < self.max_retries:
+                retry_after = response.headers.get('Retry-After')
+                try:
+                    wait_time = float(retry_after) if retry_after is not None else self.retry_backoff ** retries
+                except (TypeError, ValueError):
+                    wait_time = self.retry_backoff ** retries
+                logger.warning(f"429 recebido para {url}. Aguardando {wait_time}s (Retry-After)")
+                time.sleep(wait_time)
+                return self.make_request(url, params, retries + 1)
+
             response.raise_for_status()
             return response
-            
+
         except requests.exceptions.RequestException as e:
             if retries < self.max_retries:
                 wait_time = self.retry_backoff ** retries
@@ -203,6 +240,93 @@ class BaseScraper(ABC):
                 return int(content_length)
         except Exception as e:
             logger.debug(f"Não foi possível obter tamanho do arquivo: {e}")
+        return None
+
+    def get_all_chapters(self, series_identifier: str, language: str = "pt-br") -> List[float]:
+        """Retorna a lista normalizada de capítulos disponíveis para uma série."""
+        series_info = self.get_series_info(series_identifier, language=language)
+        if not series_info:
+            return []
+
+        chapter_numbers: List[float] = []
+        available_chapters = series_info.get('available_chapters') or series_info.get('chapters') or []
+
+        for item in available_chapters:
+            if isinstance(item, (int, float)):
+                chapter_numbers.append(float(item))
+                continue
+
+            if not isinstance(item, dict):
+                continue
+
+            chapter_value = item.get('chapter')
+            if chapter_value is None:
+                chapter_value = item.get('number')
+
+            if chapter_value is None:
+                continue
+
+            try:
+                chapter_numbers.append(float(chapter_value))
+            except (TypeError, ValueError):
+                continue
+
+        if chapter_numbers:
+            return sorted(set(chapter_numbers))
+
+        total_chapters = series_info.get('total_chapters')
+        if isinstance(total_chapters, int) and total_chapters > 0:
+            return [float(number) for number in range(1, total_chapters + 1)]
+
+        return []
+
+    def get_chapter_url(self, series_identifier: str, chapter_number: float, language: str = "pt-br") -> Optional[Dict[str, Any]]:
+        """Tenta resolver a URL de download direta de um capítulo ou item."""
+        series_info = self.get_series_info(series_identifier, language=language)
+        if not series_info:
+            return None
+
+        available_chapters = series_info.get('available_chapters') or []
+        for item in available_chapters:
+            if not isinstance(item, dict):
+                continue
+
+            candidate = item.get('chapter')
+            if candidate is None:
+                candidate = item.get('number')
+
+            try:
+                if candidate is not None and float(candidate) == float(chapter_number):
+                    download_url = item.get('download_url') or item.get('url')
+                    if download_url:
+                        payload = dict(item)
+                        payload['download_url'] = download_url
+                        payload['format'] = payload.get('format') or payload.get('format_type') or series_info.get('format') or 'unknown'
+                        return payload
+            except (TypeError, ValueError):
+                continue
+
+        download_url = series_info.get('download_url')
+        if download_url:
+            return {
+                'download_url': download_url,
+                'format': series_info.get('format') or series_info.get('format_type') or 'unknown',
+                'volume': series_info.get('volume'),
+                'chapter': chapter_number,
+                'title': series_info.get('title'),
+            }
+
+        downloadable_files = series_info.get('downloadable_files') or []
+        if downloadable_files:
+            first_file = downloadable_files[0]
+            return {
+                'download_url': first_file.get('url'),
+                'format': first_file.get('format', 'unknown'),
+                'volume': series_info.get('volume'),
+                'chapter': chapter_number,
+                'title': first_file.get('name') or series_info.get('title'),
+            }
+
         return None
     
     def to_dict(self) -> Dict:

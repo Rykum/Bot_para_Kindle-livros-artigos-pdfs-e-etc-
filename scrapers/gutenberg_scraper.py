@@ -28,7 +28,7 @@ class ProjectGutenbergScraper(BaseScraper):
         )
         self.search_url = "https://gutendex.com/books"
     
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
         Pesquisa livros no Project Gutenberg via Gutendex API
         
@@ -45,10 +45,12 @@ class ProjectGutenbergScraper(BaseScraper):
         results = []
         
         try:
-            # Gutendex API parameters
+            # Gutendex API. Idioma escolhido pelo usuário (pt/en/es); sem
+            # escolha, busca amplo (pt,en,es) em vez de travar só em português.
+            lang = (language or '').lower().replace('pt-br', 'pt')
             params = {
                 'search': query,
-                'languages': 'pt',  # Apenas português
+                'languages': lang if lang in ('pt', 'en', 'es') else 'pt,en,es',
                 'sort_by': 'downloads',
             }
             
@@ -129,14 +131,15 @@ class ProjectGutenbergScraper(BaseScraper):
         
         return results
     
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas de um livro
         Para Gutenberg, cada livro é geralmente uma obra única
-        
+
         Args:
             series_url: URL do livro no formato https://www.gutenberg.org/ebooks/{id}
-        
+            language: não aplicável ao Gutenberg, mantido por compatibilidade de assinatura
+
         Returns:
             Dict com informações do livro
         """
@@ -189,6 +192,14 @@ class ProjectGutenbergScraper(BaseScraper):
                 'chapter': metadata_parsed.get('chapter'),
                 'available_formats': available_formats,
                 'download_url': download_url,
+                'format': available_formats[0] if available_formats else 'unknown',
+                'available_chapters': [{
+                    'chapter': metadata_parsed.get('chapter') or 1,
+                    'volume': metadata_parsed.get('volume') or 1,
+                    'title': title,
+                    'download_url': download_url,
+                    'format': available_formats[0] if available_formats else 'unknown',
+                }] if download_url else [],
                 'url': series_url
             }
             

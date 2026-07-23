@@ -28,7 +28,7 @@ class ArchiveOrgScraper(BaseScraper):
         )
         self.search_api = "https://archive.org/advancedsearch.php"
     
-    def search(self, query: str, formats: List[str] = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
         """
         Pesquisa no Internet Archive usando Advanced Search API
         
@@ -41,28 +41,30 @@ class ArchiveOrgScraper(BaseScraper):
         """
         if formats is None:
             formats = ['pdf', 'epub', 'djvu']
-        
+
         results = []
-        
+
         try:
-            # Construir query para API
-            # Focar em conteúdo em português e formatos específicos
-            format_query = ' OR '.join([f'mediatype:{fmt}' for fmt in formats])
-            
-            # Query principal com filtros
-            search_query = f'({query}) AND language:(por OR portuguese OR "português")'
-            
+            # Busca por TÍTULO entre textos (livros/HQs). O idioma é opcional:
+            # sem idioma, traz tudo; com idioma, filtra (o usuário escolhe).
+            search_query = f'title:({query}) AND mediatype:texts'
+            lang_terms = {
+                'pt': '(portuguese OR por OR pt OR "pt-br" OR "português")',
+                'pt-br': '(portuguese OR por OR pt OR "pt-br" OR "português")',
+                'en': '(english OR eng OR en)',
+                'es': '(spanish OR spa OR es OR "español")',
+            }.get((language or '').lower())
+            if lang_terms:
+                search_query += f' AND language:{lang_terms}'
+
             params = {
                 'q': search_query,
-                'fl[]': ['identifier', 'title', 'creator', 'year', 'language', 'mediatype'],
+                'fl[]': ['identifier', 'title', 'creator', 'year', 'language', 'mediatype', 'downloads'],
                 'sort[]': ['downloads desc'],
-                'rows': 50,
-                'page': 1,
+                'rows': 40,
                 'output': 'json',
-                'save': 'yes',
-                'fields': 'identifier,title,creator,year,language,mediatype,downloads'
             }
-            
+
             response = self.make_request(self.search_api, params=params)
             if not response:
                 return results
@@ -85,7 +87,12 @@ class ArchiveOrgScraper(BaseScraper):
                 
                 # Extrair metadados de volume/capítulo do título
                 metadata_parsed = self.parse_volume_chapter(title)
-                
+
+                # Idioma real do item (pode vir como lista).
+                doc_lang = doc.get('language')
+                if isinstance(doc_lang, list):
+                    doc_lang = doc_lang[0] if doc_lang else None
+
                 result = ScrapedResult(
                     title=title,
                     url=item_url,
@@ -95,7 +102,7 @@ class ArchiveOrgScraper(BaseScraper):
                     chapter=metadata_parsed.get('chapter'),
                     number=metadata_parsed.get('number'),
                     series_name=query,
-                    language='pt-br',
+                    language=doc_lang or 'desconhecido',
                     metadata={
                         'identifier': identifier,
                         'creator': doc.get('creator', ''),
@@ -132,14 +139,15 @@ class ArchiveOrgScraper(BaseScraper):
         
         return 'unknown'
     
-    def get_series_info(self, series_url: str) -> Dict:
+    def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas de um item
         Inclui lista de arquivos disponíveis para download
-        
+
         Args:
             series_url: URL do item no formato https://archive.org/details/{identifier}
-        
+            language: não aplicável ao Archive.org, mantido por compatibilidade de assinatura
+
         Returns:
             Dict com informações do item e arquivos disponíveis
         """
@@ -158,20 +166,21 @@ class ArchiveOrgScraper(BaseScraper):
             metadata = data.get('metadata', {})
             files = data.get('files', [])
             
-            # Filtrar arquivos baixáveis (PDF, EPUB, etc)
+            # Só arquivos de livro/quadrinho de verdade (evita .jpg/.xml/etc.).
+            book_exts = ('.pdf', '.epub', '.djvu', '.cbz', '.cbr', '.mobi', '.txt')
             downloadable_files = []
             for file in files:
                 name = file.get('name', '')
-                source = file.get('source', '')
-                
-                # Apenas arquivos originais ou derivados principais
-                if source == 'original' or any(name.endswith(ext) for ext in ['.pdf', '.epub', '.djvu', '.cbz']):
+                if name.lower().endswith(book_exts):
                     downloadable_files.append({
                         'name': name,
                         'size': file.get('size', 0),
-                        'format': name.split('.')[-1].lower() if '.' in name else 'unknown',
+                        'format': name.rsplit('.', 1)[-1].lower(),
                         'url': f"{self.base_url}/download/{identifier}/{name}"
                     })
+            # Prefere PDF, depois EPUB, depois o resto.
+            _priority = {'pdf': 0, 'epub': 1, 'djvu': 2, 'cbz': 3, 'cbr': 4, 'mobi': 5, 'txt': 6}
+            downloadable_files.sort(key=lambda f: _priority.get(f['format'], 9))
             
             # Extrair informações de volume/capítulo
             title = metadata.get('title', '')
@@ -190,6 +199,15 @@ class ArchiveOrgScraper(BaseScraper):
                 'volume': metadata_parsed.get('volume'),
                 'chapter': metadata_parsed.get('chapter'),
                 'total_files': len(downloadable_files),
+                'download_url': downloadable_files[0]['url'] if downloadable_files else None,
+                'format': downloadable_files[0]['format'] if downloadable_files else 'unknown',
+                'available_chapters': [{
+                    'chapter': metadata_parsed.get('chapter') or 1,
+                    'volume': metadata_parsed.get('volume') or 1,
+                    'title': title,
+                    'download_url': downloadable_files[0]['url'] if downloadable_files else None,
+                    'format': downloadable_files[0]['format'] if downloadable_files else 'unknown',
+                }] if downloadable_files else [],
                 'downloadable_files': downloadable_files,
                 'url': series_url
             }

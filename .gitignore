@@ -1,6 +1,15 @@
-```
 # Database file
 media_bot.db
+
+# Runtime output (gerado pelo bot)
+cache/
+downloads/
+graphify-out/
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
 
 # Environment variables
 .env
@@ -35,4 +44,12 @@ requirements.txt.bak
 .Trashes
 ehthumbs.db
 Thumbs.db
-```
+# Configurações do usuário
+media_bot_settings.json
+
+# Saída de exportação (Komga/Kavita)
+exports/
+
+# SQLite WAL
+*.db-shm
+*.db-wal

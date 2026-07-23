@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import and_
 from database import db_manager, Series, Volume, Chapter, MediaFile
 from normalizer import ContentNormalizer
-from datetime import datetime
+from datetime import datetime, timezone
 
 class LibraryManager:
     """Gerenciador de biblioteca local e detecção de itens faltantes."""
@@ -18,36 +18,64 @@ class LibraryManager:
         self.normalizer = ContentNormalizer()
 
     # --- CRUD: SÉRIES ---
-    def get_or_create_series(self, title: str, source_name: str = 'unknown', 
+    def get_or_create_series(self, title: str, source_name: str = 'unknown',
                              source_id: Optional[str] = None) -> Series:
-        """Obtém série existente ou cria nova se não existir."""
-        normalized_title = self.normalizer.normalize_title(title)
-        
-        # Busca por título normalizado
-        series = self.session.query(Series).filter(
-            Series.title.ilike(f'%{normalized_title}%')
-        ).first()
+        """Obtém série existente ou cria nova se não existir.
 
-        if not series:
-            series = Series(
-                title=title,
-                source_name=source_name,
-                source_id=source_id,
-                language='pt-br',
-                status='unknown'
-            )
-            self.session.add(series)
-            self.session.commit()
-            self.session.refresh(series)
-        
+        A comparação é feita pelo título NORMALIZADO nos dois lados (robusto a
+        acento/pontuação) — o `ilike` do SQLite não é insensível a acento, o que
+        antes gerava séries duplicadas (ex.: "Drácula - Bram Stoker (1897)").
+        """
+        normalized_title = self.normalizer.normalize_title(title)
+
+        matches = [
+            s for s in self.session.query(Series).all()
+            if self.normalizer.normalize_title(s.title) == normalized_title
+        ]
+        if matches:
+            # Prefere a série que já tem dados de download (mais volumes).
+            matches.sort(key=lambda s: len(s.volumes), reverse=True)
+            return matches[0]
+
+        series = Series(
+            title=title,
+            source_name=source_name,
+            source_id=source_id,
+            language='pt-br',
+            status='unknown'
+        )
+        self.session.add(series)
+        self.session.commit()
+        self.session.refresh(series)
         return series
+
+    def dedupe_series(self) -> int:
+        """Remove séries duplicadas VAZIAS (mesmo título normalizado), mantendo
+        a que tem dados. Retorna quantas foram removidas."""
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for s in self.session.query(Series).all():
+            groups[self.normalizer.normalize_title(s.title)].append(s)
+
+        removed = 0
+        for series_list in groups.values():
+            if len(series_list) < 2:
+                continue
+            series_list.sort(key=lambda s: len(s.volumes), reverse=True)
+            for dup in series_list[1:]:
+                if len(dup.volumes) == 0:  # só remove duplicatas sem dados
+                    self.session.delete(dup)
+                    removed += 1
+        if removed:
+            self.session.commit()
+        return removed
 
     def update_series_info(self, series: Series, **kwargs):
         """Atualiza metadados da série."""
         for key, value in kwargs.items():
             if hasattr(series, key) and value is not None:
                 setattr(series, key, value)
-        series.updated_at = datetime.utcnow()
+        series.updated_at = datetime.now(timezone.utc)
         self.session.commit()
 
     # --- CRUD: VOLUMES & CAPÍTULOS ---
@@ -100,7 +128,7 @@ class LibraryManager:
             file_size=file_size,
             sha256_hash=sha256_hash,
             download_status='completed',
-            downloaded_at=datetime.utcnow()
+            downloaded_at=datetime.now(timezone.utc)
         )
         self.session.add(media_file)
         self.session.commit()
@@ -166,6 +194,20 @@ class LibraryManager:
     def list_all_series(self) -> List[Series]:
         """Lista todas as séries na biblioteca."""
         return self.session.query(Series).order_by(Series.title).all()
+
+    def iter_downloaded_files(self, series):
+        """Itera (volume_number, chapter_number, file_path, file_format) dos arquivos baixados."""
+        volumes = self.session.query(Volume).filter(Volume.series_id == series.id).all()
+        for vol in volumes:
+            chapters = self.session.query(Chapter).filter(Chapter.volume_id == vol.id).all()
+            for chap in chapters:
+                files = self.session.query(MediaFile).filter(
+                    MediaFile.chapter_id == chap.id,
+                    MediaFile.download_status == 'completed'
+                ).all()
+                for media_file in files:
+                    yield (vol.volume_number, chap.chapter_number,
+                           media_file.file_path, media_file.file_format)
 
     def cleanup(self):
         """Fecha sessão do banco."""

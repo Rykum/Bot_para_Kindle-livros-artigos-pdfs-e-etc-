@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Media Bot PT-BR</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        Media Bot
+      </div>
+      <div class="brand-sub">Biblioteca PT-BR</div>
+      <nav>
+        <button class="nav-item active" data-view="dashboard">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-view="search">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Buscar
+        </button>
+        <button class="nav-item" data-view="library">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Biblioteca
+        </button>
+        <button class="nav-item" data-view="downloads">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Downloads
+        </button>
+        <button class="nav-item" data-view="tools">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Ferramentas
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="conn-state">Conectando…</span>
+        <div class="signature">By <b>Munhoz</b></div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <!-- Dashboard -->
+      <section id="view-dashboard" class="view active">
+        <div class="view-head">
+          <h1>Dashboard</h1>
+          <div class="sub">Visão geral da sua biblioteca.</div>
+        </div>
+        <div id="dash-cards" class="card-grid"></div>
+      </section>
+
+      <!-- Buscar -->
+      <section id="view-search" class="view">
+        <div class="view-head">
+          <h1>Buscar</h1>
+          <div class="sub">Encontre uma série em todas as fontes disponíveis.</div>
+        </div>
+        <div class="panel">
+          <div class="search-bar">
+            <div class="search-input"><input id="q" placeholder="Título da série" value="Dandadan" /></div>
+            <select id="media-type" title="Tipo de mídia">
+              <option>manga</option><option>livro</option><option>hq</option><option>manhwa</option><option>artigo</option>
+            </select>
+            <select id="search-lang" title="Idioma (aplica-se a livros/artigos)">
+              <option value="">Qualquer idioma</option>
+              <option value="pt">Português</option>
+              <option value="en">Inglês</option>
+              <option value="es">Espanhol</option>
+            </select>
+            <button id="btn-search" class="btn accent">Buscar</button>
+          </div>
+          <div class="hint" style="margin-top:10px">O idioma filtra livros/artigos (Archive.org, Gutenberg). Para mangá, o idioma é escolhido depois, ao ver os capítulos.</div>
+        </div>
+        <div id="search-results" class="card-grid"></div>
+      </section>
+
+      <!-- Seletor de capítulos -->
+      <section id="view-chapters" class="view">
+        <div class="view-head row-between">
+          <div>
+            <h1 id="chapters-title">Capítulos</h1>
+            <div id="chapters-summary" class="sub">—</div>
+          </div>
+          <button id="btn-chapters-back" class="btn ghost">← Voltar</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Idioma</div>
+          <div class="fields">
+            <div class="field">
+              <label for="lang-primary">Idioma principal</label>
+              <select id="lang-primary" title="Idioma principal da busca/download">
+                <option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="lang-fallback">Idioma secundário (fallback)</label>
+              <select id="lang-fallback" title="Usado só se o capítulo não vier no principal, após esgotar as re-tentativas">
+                <option value="">nenhum</option><option value="pt-br">pt-br</option><option value="en">en</option><option value="es">es</option>
+              </select>
+              <span class="hint">Só entra em ação após esgotar o idioma principal.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Download</div>
+          <div class="field-label" style="display:flex; align-items:center; gap:8px; margin-bottom:8px">
+            Intervalo
+            <button id="btn-range-help" class="help-btn" title="Como funciona o intervalo?" aria-label="Ajuda sobre o intervalo">?</button>
+          </div>
+          <div class="fields" style="align-items:end">
+            <div class="field">
+              <label for="range-from">de</label>
+              <input id="range-from" type="number" min="0" placeholder="ex.: 1" />
+            </div>
+            <div class="field">
+              <label for="range-to">até</label>
+              <input id="range-to" type="number" min="0" placeholder="ex.: 50" />
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button id="btn-range-apply" class="btn">Aplicar intervalo</button>
+            </div>
+          </div>
+          <div id="quick-ranges" class="quick-ranges"></div>
+          <div class="actions" style="margin-top:16px">
+            <button id="btn-download-all" class="btn success">Baixar tudo (faltantes)</button>
+            <button id="btn-download-selected" class="btn accent" disabled>Baixar selecionados (0)</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Capítulos disponíveis</div>
+          <div id="chapter-grid" class="chapter-grid"></div>
+        </div>
+      </section>
+
+      <!-- Biblioteca -->
+      <section id="view-library" class="view">
+        <div class="view-head">
+          <h1>Biblioteca</h1>
+          <div class="sub">Suas séries baixadas, com capa e progresso.</div>
+        </div>
+        <!-- Capas: placeholder inline (data-URI SVG, sem CDN) via COVER_PLACEHOLDER em app.js;
+             substituído em tempo de execução pela capa real de Api.enrich_metadata. -->
+        <div id="library-cards" class="card-grid"></div>
+      </section>
+
+      <!-- Downloads / Fila -->
+      <section id="view-downloads" class="view">
+        <div class="view-head">
+          <h1>Downloads</h1>
+          <div class="sub">Fila persistente — acompanhe, pause e gerencie por item.</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Item atual</div>
+          <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
+          <div id="progress-text" class="muted">Sem download em andamento.</div>
+        </div>
+
+        <div class="panel">
+          <div class="row-between" style="align-items:center; margin-bottom:16px">
+            <div class="panel-title" style="margin:0">Fila</div>
+            <div class="actions">
+              <span id="queue-counts" class="pill">—</span>
+              <button id="btn-queue-pause" class="btn sm">Pausar fila</button>
+              <button id="btn-queue-clear" class="btn sm ghost">Limpar concluídos</button>
+            </div>
+          </div>
+          <div id="queue-list" class="queue-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Log em tempo real</div>
+          <pre id="log" class="log"></pre>
+        </div>
+      </section>
+
+      <!-- Ferramentas -->
+      <section id="view-tools" class="view">
+        <div class="view-head">
+          <h1>Ferramentas</h1>
+          <div class="sub">Configurações, manutenção e diagnóstico.</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Pasta de downloads</div>
+          <div class="row-between" style="align-items:center; gap:16px">
+            <code id="download-dir" class="path">—</code>
+            <div class="actions">
+              <button id="btn-open-dir" class="btn">Abrir pasta</button>
+              <button id="btn-choose-dir" class="btn accent">Escolher pasta…</button>
+            </div>
+          </div>
+          <div class="hint" style="margin-top:8px">Os arquivos baixados serão salvos aqui. A escolha fica salva entre sessões.</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Manutenção</div>
+          <div class="actions">
+            <button id="btn-cache" class="btn warn">Limpar cache</button>
+            <button id="btn-graph" class="btn ghost">Status do grafo</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
