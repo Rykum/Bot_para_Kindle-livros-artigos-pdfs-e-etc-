@@ -37,3 +37,13 @@ input { flex: 1; min-width: 220px; }
 .chapter-chip.done { opacity: .55; cursor: not-allowed; }
 .chapter-chip .lang { color: #64748b; font-size: 11px; margin-left: auto; }
 label select { margin-left: 6px; }
+.queue-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; max-height: 40vh; overflow-y: auto; }
+.queue-item { display: flex; align-items: center; gap: 10px; background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 8px 12px; }
+.queue-item .title { flex: 1; font-size: 13px; }
+.queue-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+.queue-badge.queued { background: #1f2937; color: #cbd5e1; }
+.queue-badge.downloading { background: #1d4ed8; color: #fff; }
+.queue-badge.done { background: #0f766e; color: #fff; }
+.queue-badge.failed { background: #7f1d1d; color: #fff; }
+.queue-badge.cancelled { background: #92400e; color: #fff; }
+.queue-item button { padding: 4px 8px; font-size: 12px; }

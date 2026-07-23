@@ -34,6 +34,7 @@ document.querySelectorAll(".nav-item").forEach((btn) => {
     document.getElementById("view-" + btn.dataset.view).classList.add("active");
     if (btn.dataset.view === "library") loadLibrary();
     if (btn.dataset.view === "dashboard") loadDashboard();
+    if (btn.dataset.view === "downloads") loadQueue();
   });
 });
 
@@ -185,12 +186,10 @@ document.getElementById("btn-range-apply").addEventListener("click", () => {
 });
 
 function startDownload(chapters) {
-  document.getElementById("progress-bar").style.width = "0%";
-  document.getElementById("progress-text").textContent = "Iniciando…";
-  if (cancelBtn()) cancelBtn().disabled = false;
-  api().download_series(chaptersState.series, chaptersState.media, chaptersState.source, chapters, langPrimary(), langFallback())
-    .then((ack) => { currentDownloadJob = ack && ack.job_id; });
+  api().enqueue(chaptersState.series, chapters, chaptersState.source, chaptersState.media,
+                langPrimary(), langFallback());
   goTo("downloads");
+  loadQueue();
 }
 document.getElementById("btn-download-all").addEventListener("click", () => startDownload(null));
 document.getElementById("btn-download-selected").addEventListener("click", () => {
@@ -198,6 +197,57 @@ document.getElementById("btn-download-selected").addEventListener("click", () =>
   if (sel.length) startDownload(sel);
 });
 document.getElementById("btn-chapters-back").addEventListener("click", () => goTo("search"));
+
+// --- fila de downloads ---
+async function loadQueue() {
+  const items = await api().queue_list();
+  renderQueue(items || []);
+}
+on("queue_update", (p) => renderQueue((p && p.items) || []));
+
+function renderQueue(items) {
+  const box = document.getElementById("queue-list");
+  if (!box) return;
+  const counts = items.reduce((a, i) => { a[i.status] = (a[i.status] || 0) + 1; return a; }, {});
+  const cEl = document.getElementById("queue-counts");
+  if (cEl) cEl.textContent =
+    `${counts.queued || 0} na fila · ${counts.downloading || 0} baixando · ${counts.done || 0} ok · ${counts.failed || 0} falhou`;
+  box.innerHTML = "";
+  items.forEach((i) => {
+    const chap = i.chapter_number == null ? "série completa" : "cap " + i.chapter_number;
+    const div = document.createElement("div");
+    div.className = "queue-item";
+    div.innerHTML = `<span class="queue-badge ${i.status}">${i.status}</span>
+      <span class="title">${i.series} · ${chap}</span>`;
+    if (i.status === "failed") {
+      const r = document.createElement("button");
+      r.className = "btn"; r.textContent = "Re-tentar";
+      r.addEventListener("click", () => api().retry_item(i.id).then(loadQueue));
+      div.appendChild(r);
+    }
+    if (i.status === "queued" || i.status === "downloading") {
+      const c = document.createElement("button");
+      c.className = "btn warn"; c.textContent = "Cancelar";
+      c.addEventListener("click", () => api().cancel_item(i.id).then(loadQueue));
+      div.appendChild(c);
+    }
+    const rm = document.createElement("button");
+    rm.className = "btn"; rm.textContent = "×";
+    rm.addEventListener("click", () => api().remove_item(i.id).then(loadQueue));
+    div.appendChild(rm);
+    box.appendChild(div);
+  });
+}
+
+let queuePaused = false;
+document.getElementById("btn-queue-pause").addEventListener("click", async () => {
+  queuePaused = !queuePaused;
+  await (queuePaused ? api().pause_queue() : api().resume_queue());
+  document.getElementById("btn-queue-pause").textContent = queuePaused ? "Retomar fila" : "Pausar fila";
+  loadQueue();
+});
+document.getElementById("btn-queue-clear").addEventListener("click", () =>
+  api().clear_finished().then(loadQueue));
 
 // --- biblioteca ---
 async function loadLibrary() {
@@ -302,4 +352,5 @@ window.addEventListener("pywebviewready", () => {
   document.getElementById("conn-state").textContent = "Pronto";
   restorePrefs();
   loadDashboard();
+  loadQueue();
 });
