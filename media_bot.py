@@ -128,7 +128,8 @@ class MediaBot:
 
     def _download_mangadex_chapter(self, scraper: MangaDexScraper, chapter_data: Dict[str, Any],
                                    series_title: str, chapter_num: float,
-                                   progress_callback: Optional[Any] = None) -> Dict[str, Any]:
+                                   progress_callback: Optional[Any] = None,
+                                   should_cancel: Optional[Any] = None) -> Dict[str, Any]:
         page_urls = chapter_data.get('page_urls') or []
         if not page_urls:
             return {
@@ -143,11 +144,11 @@ class MediaBot:
         try:
             with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
                 for index, page_url in enumerate(page_urls, 1):
-                    response = scraper.session.get(page_url, timeout=60)
-                    response.raise_for_status()
-
+                    if should_cancel is not None and should_cancel():
+                        raise RuntimeError("cancelled")
+                    content = scraper.fetch_page(page_url, should_cancel=should_cancel)
                     suffix = Path(urlparse(page_url).path).suffix or '.jpg'
-                    archive.writestr(f"{index:03d}{suffix}", response.content)
+                    archive.writestr(f"{index:03d}{suffix}", content)
 
                     if progress_callback:
                         progress_callback(f"{series_title} cap. {chapter_label}", index, len(page_urls))
@@ -175,9 +176,11 @@ class MediaBot:
                     output_path.unlink()
                 except Exception:
                     pass
+            cancelled = str(exc) == "cancelled"
             return {
                 'success': False,
                 'error': str(exc),
+                'cancelled': cancelled,
             }
 
     def search_series(self, query: str, media_type: str = "manga") -> List[Dict[str, Any]]:
@@ -272,23 +275,41 @@ class MediaBot:
         scraper = self._resolve_scraper(source_name)
         if not scraper:
             print(f"   ❌ Scraper '{source_name}' não encontrado.")
-            return
-        
+            return {
+                'total': 0,
+                'downloaded': 0,
+                'failed': 0,
+                'cancelled': False,
+                'failed_chapters': [],
+            }
+
         # Passo 2: Obter todos os capítulos disponíveis na fonte
         series_reference = self._resolve_series_reference(scraper, series_title, media_type)
         available_chapters = self.get_complete_series_chapters(series_reference, source_name, media_type)
-        
+
         if not available_chapters:
             print("   ❌ Nenhum capítulo disponível para download.")
-            return
-        
+            return {
+                'total': 0,
+                'downloaded': 0,
+                'failed': 0,
+                'cancelled': False,
+                'failed_chapters': [],
+            }
+
         # Passo 3: Identificar o que já temos baixado
         missing_chapters = self.library.find_missing_chapters(series, available_chapters)
-        
+
         if not missing_chapters:
             print(f"   🎉 Série completa! Todos os {len(available_chapters)} capítulos já estão baixados.")
-            return
-        
+            return {
+                'total': 0,
+                'downloaded': 0,
+                'failed': 0,
+                'cancelled': False,
+                'failed_chapters': [],
+            }
+
         print(f"   📥 Faltam baixar {len(missing_chapters)} de {len(available_chapters)} capítulos.")
         previous_progress_callback = self.downloader.progress_callback
         self.downloader.progress_callback = progress_callback
@@ -296,10 +317,13 @@ class MediaBot:
             # Passo 4: Baixar capítulos faltantes
             downloaded_count = 0
             failed_count = 0
-            
+            cancelled = False
+            failed_chapters = []
+
             for chapter_num in missing_chapters:
                 if should_cancel is not None and should_cancel():
                     print("   ⏹️  Download cancelado pelo usuário.")
+                    cancelled = True
                     break
                 chapter_label = self._format_chapter_label(chapter_num)
                 print(f"\n   ⬇️  Baixando Capítulo {chapter_label}...")
@@ -316,10 +340,12 @@ class MediaBot:
                                 series_title,
                                 chapter_num,
                                 progress_callback=progress_callback,
+                                should_cancel=should_cancel,
                             )
                         else:
                             print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
                             failed_count += 1
+                            failed_chapters.append(chapter_num)
                             continue
                     else:
                         # Executa download real
@@ -355,15 +381,33 @@ class MediaBot:
                         print(f"      ✅ Sucesso! ({metadata.get('size', 0) / 1024 / 1024:.2f} MB)")
                     else:
                         failed_count += 1
+                        failed_chapters.append(chapter_num)
                         print(f"      ❌ Falha no download: {result.get('error', 'Erro desconhecido')}")
-                        
+                        if result.get('cancelled'):
+                            cancelled = True
+
                 except Exception as e:
                     failed_count += 1
+                    failed_chapters.append(chapter_num)
                     print(f"      ❌ Erro inesperado: {e}")
-                
-                # Rate limiting entre capítulos
-                time.sleep(2)
-            
+
+                if cancelled:
+                    print("   ⏹️  Download cancelado pelo usuário.")
+                    break
+
+                # Rate limiting interrompível entre capítulos
+                waited = 0.0
+                while waited < 2.0:
+                    if should_cancel is not None and should_cancel():
+                        cancelled = True
+                        print("   ⏹️  Download cancelado pelo usuário.")
+                        break
+                    time.sleep(0.2)
+                    waited += 0.2
+
+                if cancelled:
+                    break
+
             # Resumo final
             print(f"\n{'='*60}")
             print(f"📊 RESUMO DO DOWNLOAD")
@@ -371,13 +415,21 @@ class MediaBot:
             print(f"   Total faltante: {len(missing_chapters)}")
             print(f"   Baixados com sucesso: {downloaded_count}")
             print(f"   Falhas: {failed_count}")
-            
+
             # Mostra progresso atualizado
             progress = self.library.get_series_progress(series)
             print(f"   Progresso total: {progress['completion_percentage']:.1f}%")
-            
+
             if progress['is_complete']:
                 print(f"\n🎉 PARABÉNS! Série '{series_title}' COMPLETA!")
+
+            return {
+                'total': len(missing_chapters),
+                'downloaded': downloaded_count,
+                'failed': failed_count,
+                'cancelled': cancelled,
+                'failed_chapters': failed_chapters,
+            }
         finally:
             self.downloader.progress_callback = previous_progress_callback
 
