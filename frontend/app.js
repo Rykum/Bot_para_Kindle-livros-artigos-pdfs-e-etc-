@@ -60,10 +60,14 @@ on("job_done", (p) => {
     if (cancelBtn()) cancelBtn().disabled = false;
   }
 });
+// #9 Recuperação: erro amigável
 on("job_error", (p) => {
-  logEl().textContent += `❌ Erro: ${p.error}\n`;
-  if (p.job_id && p.job_id === currentDownloadJob) {
+  logEl().textContent += `⚠️ ${p.label}: ${p.error}\n`;
+  logEl().scrollTop = logEl().scrollHeight;
+  if (p.job_id === currentDownloadJob) {
+    document.getElementById("progress-text").textContent = "Falhou — tente novamente.";
     currentDownloadJob = null;
+    if (cancelBtn()) cancelBtn().disabled = false;
   }
 });
 
@@ -81,6 +85,10 @@ document.getElementById("btn-search").addEventListener("click", async () => {
   if (!q) return;
   document.getElementById("search-results").innerHTML = '<p class="muted">Buscando…</p>';
   await api().search(q, mt);
+});
+// #7 Eficiência: Enter no campo de busca dispara a busca
+document.getElementById("q").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("btn-search").click();
 });
 on("search_results", (p) => {
   const box = document.getElementById("search-results");
@@ -242,11 +250,33 @@ async function loadDashboard() {
 }
 
 // --- ferramentas ---
+// #5 Prevenção de erro: confirmar limpar cache
 document.getElementById("btn-cache").addEventListener("click", async () => {
+  if (!confirm("Limpar todo o cache local de buscas e capítulos?")) return;
   const r = await api().clear_cache();
   alert(`Cache removido: ${r.removed} arquivo(s)`);
 });
 document.getElementById("btn-graph").addEventListener("click", () => { api().graph_status(); goTo("downloads"); });
+
+// #6 Reconhecer em vez de lembrar: persistir idioma/fonte/tipo
+function persistPrefs() {
+  localStorage.setItem("mb_prefs", JSON.stringify({
+    lang: langPrimary(), fb: document.getElementById("lang-fallback").value,
+    media: document.getElementById("media-type").value,
+  }));
+}
+function restorePrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem("mb_prefs") || "{}");
+    if (p.lang) document.getElementById("lang-primary").value = p.lang;
+    if (p.fb !== undefined) document.getElementById("lang-fallback").value = p.fb;
+    if (p.media) document.getElementById("media-type").value = p.media;
+  } catch (_) {}
+}
+["lang-primary", "lang-fallback", "media-type"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("change", persistPrefs);
+});
 
 // --- cancelar download (feedback imediato + reset em job_done) ---
 const cancelBtn = () => document.getElementById("btn-cancel");
@@ -262,5 +292,6 @@ if (cancelBtn()) {
 // --- init ---
 window.addEventListener("pywebviewready", () => {
   document.getElementById("conn-state").textContent = "Pronto";
+  restorePrefs();
   loadDashboard();
 });

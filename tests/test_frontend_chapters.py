@@ -33,3 +33,15 @@ def test_appjs_wires_chapters_and_cancel_reset():
 def test_styles_has_chapter_grid():
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
     assert "chapter" in css.lower()
+
+
+def test_appjs_has_nielsen_safeguards():
+    js = (FRONT / "app.js").read_text(encoding="utf-8")
+    # #5 prevenção: confirmação ao limpar cache
+    assert "confirm(" in js
+    # #6 reconhecer: persiste idioma/fonte
+    assert "localStorage" in js
+    # #9 recuperação: handler de job_error mostra mensagem amigável
+    assert 'on("job_error"' in js
+    # #7 eficiência: Enter dispara busca
+    assert '"Enter"' in js or "keydown" in js
