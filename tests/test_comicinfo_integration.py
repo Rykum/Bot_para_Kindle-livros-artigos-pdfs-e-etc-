@@ -35,3 +35,13 @@ def test_mangadex_chapter_writes_comicinfo():
             assert got["LanguageISO"] == "pt"
     finally:
         bot.cleanup()
+
+
+def test_series_meta_skipped_for_non_mangadex():
+    bot = make_bot()
+    try:
+        # Fonte não-MangaDex (livro/artigo) não deve chamar o enricher de mangá
+        # (Jikan/AniList) nem fazer qualquer requisição HTTP.
+        assert bot._build_series_meta("X", "archive", "livro", "ref") == {"series": "X"}
+    finally:
+        bot.cleanup()

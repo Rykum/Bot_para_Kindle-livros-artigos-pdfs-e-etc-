@@ -13,6 +13,8 @@ def test_download_returns_summary_and_stops_on_cancel(monkeypatch):
     try:
         monkeypatch.setattr(bot, "_resolve_series_reference", lambda *a, **k: "ref")
         monkeypatch.setattr(bot, "get_complete_series_chapters", lambda *a, **k: [1.0, 2.0, 3.0])
+        # Evita chamada HTTP real ao enricher (Jikan/AniList) durante o teste.
+        monkeypatch.setattr(bot, "_build_series_meta", lambda *a, **k: {"series": "Serie"})
         summary = bot.download_complete_series("Serie", source_name="mangadex", should_cancel=lambda: True)
         assert summary["cancelled"] is True
         assert summary["downloaded"] == 0

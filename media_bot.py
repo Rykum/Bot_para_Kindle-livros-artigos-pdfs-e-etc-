@@ -14,7 +14,6 @@ import time
 import argparse
 import json
 from collections.abc import Mapping
-import zipfile
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -363,6 +362,31 @@ class MediaBot:
                 pass
             return "fail"
 
+    def _build_series_meta(self, series_title: str, source_name: str, media_type: str,
+                           series_reference: str) -> Dict[str, Any]:
+        """Metadados da série para o ComicInfo.xml (1x por download; degrada a vazio).
+
+        O enricher (Jikan/AniList) é uma busca de metadados de mangá; só faz sentido
+        chamá-lo para a fonte MangaDex — para archive.org/Gutenberg (livros/artigos)
+        seria semanticamente errado e adicionaria chamadas HTTP bloqueantes à toa.
+        """
+        meta = {'series': series_title}
+        if (source_name or "").strip().lower() != "mangadex":
+            return meta
+        try:
+            from app.metadata_enricher import MetadataEnricher
+            enriched = MetadataEnricher(cache=self.cache).enrich(series_title) or {}
+            authors = enriched.get('authors') or []
+            meta.update({
+                'summary': enriched.get('synopsis'),
+                'writer': ", ".join(authors) if authors else None,
+                'count': enriched.get('chapters'),
+                'web': series_reference if str(series_reference).startswith('http') else None,
+            })
+        except Exception:
+            pass
+        return meta
+
     def download_complete_series(self, series_title: str, media_type: str = "manga",
                                  source_name: str = "mangadex", skip_existing: bool = True,
                                  progress_callback: Optional[Any] = None,
@@ -399,20 +423,9 @@ class MediaBot:
         # Passo 2: Obter todos os capítulos disponíveis na fonte (idioma primário)
         series_reference = self._resolve_series_reference(scraper, series_title, media_type)
 
-        # Metadados da série para o ComicInfo.xml (1x por download; degrada a vazio)
-        series_meta = {'series': series_title}
-        try:
-            from app.metadata_enricher import MetadataEnricher
-            enriched = MetadataEnricher(cache=self.cache).enrich(series_title) or {}
-            authors = enriched.get('authors') or []
-            series_meta.update({
-                'summary': enriched.get('synopsis'),
-                'writer': ", ".join(authors) if authors else None,
-                'count': enriched.get('chapters'),
-                'web': series_reference if str(series_reference).startswith('http') else None,
-            })
-        except Exception:
-            pass
+        # Metadados da série para o ComicInfo.xml (1x por download; degrada a vazio;
+        # só faz sentido/chama o enricher para mangá do MangaDex).
+        series_meta = self._build_series_meta(series_title, source_name, media_type, series_reference)
 
         available_chapters = self.get_complete_series_chapters(series_reference, source_name, media_type,
                                                                 language=language)

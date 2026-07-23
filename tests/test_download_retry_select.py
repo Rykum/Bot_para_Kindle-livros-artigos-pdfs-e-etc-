@@ -11,6 +11,8 @@ def make_bot():
 def _stub_common(bot, monkeypatch, available):
     monkeypatch.setattr(bot, "_resolve_series_reference", lambda *a, **k: "ref")
     monkeypatch.setattr(bot, "get_complete_series_chapters", lambda *a, **k: list(available))
+    # Evita chamadas HTTP reais ao enricher (Jikan/AniList) durante os testes.
+    monkeypatch.setattr(bot, "_build_series_meta", lambda *a, **k: {"series": "Serie"})
 
 
 def test_only_selected_chapters_are_downloaded(monkeypatch):
