@@ -48,6 +48,10 @@ class MediaBot:
 
         # Inicializa componentes
         self.library = LibraryManager()
+        try:
+            self.library.dedupe_series()  # auto-limpa duplicatas antigas
+        except Exception:
+            pass
         self.downloader = DownloadManager(str(self.base_dir))
         self.cache = CacheManager()
         self.normalizer = ContentNormalizer()
