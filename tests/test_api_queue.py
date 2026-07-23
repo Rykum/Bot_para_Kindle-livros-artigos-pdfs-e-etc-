@@ -63,3 +63,54 @@ def test_queue_list_and_clear_finished():
         assert api.queue_list() == []
     finally:
         service.stop()
+
+
+def test_item_enqueued_during_drain_exit_is_not_stranded():
+    # Regressao: se o item for enfileirado exatamente na janela entre o
+    # `break` do drain (fila vazia) e o reset de `_draining` no `finally`,
+    # o antigo codigo deixava o item preso em "queued" ate o proximo
+    # enqueue/retry/resume. A propriedade que verificamos aqui e a de
+    # recuperacao: apos o primeiro item terminar (drain completo), um
+    # segundo item enfileirado depois deve, de qualquer forma, tambem
+    # chegar a "done" - provando que o drain reinicia sozinho quando ha
+    # trabalho pendente ao sair.
+    events, bot = [], FakeBot()
+    api, service = make_api(events, bot)
+    try:
+        for it in api.queue_list():
+            api.remove_item(it["id"])
+
+        ack1 = api.enqueue("Serie A", [1.0])
+        assert ack1["enqueued"] == 1
+        _wait(lambda: any(i["status"] == "done" for i in api.queue_list()))
+        items = api.queue_list()
+        assert items and all(i["status"] == "done" for i in items)
+
+        ack2 = api.enqueue("Serie B", [1.0])
+        assert ack2["enqueued"] == 1
+        _wait(lambda: any(i["series"] == "Serie B" and i["status"] == "done" for i in api.queue_list()))
+        items = api.queue_list()
+        b_items = [i for i in items if i["series"] == "Serie B"]
+        assert b_items and all(i["status"] == "done" for i in b_items)
+    finally:
+        service.stop()
+
+
+def test_whole_series_with_failures_marked_failed():
+    class PartialFailBot(FakeBot):
+        def download_complete_series(self, series, **kwargs):
+            return {"total": 2, "downloaded": 0, "failed": 2, "cancelled": False,
+                    "failed_chapters": [1.0, 2.0]}
+
+    events, bot = [], PartialFailBot()
+    api, service = make_api(events, bot)
+    try:
+        for it in api.queue_list():
+            api.remove_item(it["id"])
+        ack = api.enqueue("Serie Com Falhas", chapters=None)
+        assert ack["enqueued"] == 1
+        _wait(lambda: all(i["status"] in ("done", "failed") for i in api.queue_list()) and api.queue_list())
+        items = api.queue_list()
+        assert items and all(i["status"] == "failed" for i in items)
+    finally:
+        service.stop()

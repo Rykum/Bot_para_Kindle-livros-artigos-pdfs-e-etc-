@@ -8,6 +8,7 @@ worker do BotService e retornam o resultado direto ao JS.
 from __future__ import annotations
 
 import json
+import threading
 from typing import Any, Dict, Optional
 
 from app.bot_service import BotService
@@ -23,6 +24,7 @@ class Api:
         self._queue = DownloadQueue()
         self._paused = False
         self._draining = False
+        self._drain_lock = threading.Lock()
 
     def set_window(self, window) -> None:
         self._window = window
@@ -122,9 +124,10 @@ class Api:
         return {"enqueued": len(ids)}
 
     def _start_drain(self):
-        if self._draining or self._paused:
-            return
-        self._draining = True
+        with self._drain_lock:
+            if self._draining or self._paused:
+                return
+            self._draining = True
 
         def drain(bot, emit):
             self._queue.requeue_stale()
@@ -146,7 +149,7 @@ class Api:
                                 item["series"], media_type=item["media_type"], source_name=item["source"],
                                 progress_callback=progress, language=item["language"],
                                 fallback_language=item["fallback_language"])
-                            ok = bool(summary and summary.get("downloaded", 0) >= 0 and not summary.get("cancelled"))
+                            ok = bool(summary) and not summary.get("cancelled") and not summary.get("failed_chapters")
                         else:
                             ok = bot.download_single_chapter(
                                 item["series"], item["chapter_number"], source_name=item["source"],
@@ -158,7 +161,10 @@ class Api:
                         self._queue.mark(job_id, "failed", str(exc))
                     emit("queue_update", {"items": self._queue.list_items(), "paused": self._paused})
             finally:
-                self._draining = False
+                with self._drain_lock:
+                    self._draining = False
+            if not self._paused and self._queue.next_queued():
+                self._start_drain()
             return {"drained": True}
 
         self._service.submit("Fila de downloads", drain)
