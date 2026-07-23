@@ -73,6 +73,23 @@ Intervalo: de [ 1 ] até [ 50 ]  [Aplicar]     (marca as checkboxes do intervalo
 - **Prioridade absoluta no primário**: enumeração para o picker e **todas as rodadas de retry** usam o idioma primário. Só depois de esgotar o primário, um capítulo ainda em `failed_chapters` é tentado no **fallback** (resolve `get_chapter_url(..., language=fallback)` e baixa). Isso é uma passada final, por capítulo, apenas se `fallback_language` estiver definido.
 - `list_series_chapters` inclui no `available` os capítulos que existem só no fallback (para que sejam selecionáveis), marcados em `by_language`.
 
+### 3.5 UI/UX — Heurísticas de Nielsen (10)
+
+Aplicação concreta às telas deste app (net-new marcado com ➕; reforço do existente com ✔):
+
+1. **Visibilidade do estado do sistema** — ✔ log/progresso ao vivo; ➕ estado por etapa ("Buscando…", "Cancelando…", "Baixando cap 5/118", "Re-tentando cap 12 (rodada 2)"), indicador de conexão e badge de idioma/fallback ativos no cabeçalho do download.
+2. **Correspondência com o mundo real** — ✔ tudo em pt-br; ➕ linguagem simples ("Baixar tudo (faltantes)", "Faltam 118"), números de capítulo como o usuário conhece, ícones/emoji com significado consistente.
+3. **Controle e liberdade do usuário** — ➕ botão **Cancelar** que realmente para (3.1); ➕ "Voltar" no seletor de capítulos; ➕ fechar/limpar seleção; nada de ação irreversível sem saída.
+4. **Consistência e padrões** — ✔ paleta e estilos de botão (accent/warn/success); ➕ terminologia única ("capítulo", "fonte", "idioma"), mesmo layout de cabeçalho/ações entre abas, botões primário/secundário previsíveis.
+5. **Prevenção de erros** — ➕ validar entradas: busca vazia bloqueada; intervalo com "de > até" corrigido/avisado e limitado ao disponível; "Baixar selecionados" desabilitado quando nada marcado; capítulos já baixados travados; confirmação em **Limpar cache**.
+6. **Reconhecer em vez de lembrar** — ➕ contadores inline (disponíveis/baixados/faltantes), marcação de idioma por capítulo (`by_language`), lembrar última seleção de idioma/fonte/tipo entre ações (persistência leve em `localStorage`), rótulos em vez de códigos.
+7. **Flexibilidade e eficiência** — ➕ atalho "Baixar tudo" vs. seleção fina; intervalo como recurso de poder; **Enter** dispara a busca; foco inicial no campo de busca.
+8. **Design estético e minimalista** — ✔ tema escuro limpo; ➕ cada view mostra só o essencial; seletor de capítulos com densidade controlada (grid compacto), sem poluição visual.
+9. **Ajudar a reconhecer, diagnosticar e recuperar de erros** — ➕ mensagens humanas no lugar de exceções cruas: "Fonte instável, re-tentando…", "Cap X indisponível em pt-br — tentando fallback (en)…", e ao final "N capítulos não vieram: [lista] — [Tentar novamente]"; erros com cor/ícone e ação de recuperação.
+10. **Ajuda e documentação** — ➕ dicas (tooltips/`title`) nos seletores de idioma/fallback e no intervalo; estados vazios orientadores ("Biblioteca vazia — use Buscar para começar"); README já cobre uso/instalação.
+
+Os itens ➕ são requisitos de aceitação da UI e entram nas tasks do frontend; devem ser verificáveis (ex.: busca vazia bloqueada, "Baixar selecionados" desabilitado sem seleção, mensagem de fallback aparece no log, confirmação de limpar cache).
+
 ## 4. Testes
 
 - `download_complete_series`: cancelamento interrompe entre páginas (mock de scraper com páginas lentas + should_cancel); retorno do resumo (`cancelled`, `downloaded`, `failed_chapters`).
