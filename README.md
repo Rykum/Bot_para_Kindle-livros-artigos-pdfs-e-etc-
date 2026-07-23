@@ -1,243 +1,123 @@
-# Bot de Pesquisa e Organização de Mídia
+# 📚 Media Bot PT-BR
 
-Bot em Python para pesquisar e organizar coleções de mangás, livros, artigos, manhwas e HQs em português do Brasil (pt-br).
+Aplicativo **desktop** para **buscar, baixar e organizar** mangás, livros, HQs, manhwas e artigos — centralizando o download numa biblioteca sua, com metadados prontos para servidores como **Komga/Kavita**.
 
-## Funcionalidades
+> Interface moderna (pywebview), fila de downloads persistente, e o núcleo que respeita as fontes (rate-limiting, retry). Desenvolvido *By Munhoz*.
 
-- ✅ Pesquisa por títulos em múltiplos formatos (PDF, EPUB, CBZ, CBR)
-- ✅ Detecção automática de volumes, capítulos e numeração
-- ✅ Busca por coleção completa (do volume/capítulo 1 ao último lançado)
-- ✅ Organização automática da coleção com verificação de continuidade
-- ✅ Identificação de itens faltantes
-- ✅ Estrutura de diretórios organizada por tipo e série
-- ✅ Banco de dados JSON para persistência das coleções
-- ✅ Relatórios detalhados de status da coleção
+---
 
-## Inspiração
-
-Este bot foi inspirado no funcionamento do **MangaFlix**, que centraliza mangás em português do Brasil organizando do capítulo 1 até o mais atual lançado.
-
-## Instalação
-
-```bash
-# Instalar dependências
-pip install -r requirements.txt
-```
-
-## Configuração Opcional (Google Custom Search API)
-
-Para habilitar pesquisas via Google:
-
-1. Crie um arquivo `.env` na raiz do projeto
-2. Adicione suas credenciais:
-
-```env
-GOOGLE_API_KEY=sua_api_key_aqui
-GOOGLE_CX=seu_cx_aqui
-```
-
-## Uso Básico
-
-### Exemplo 1: Buscar série completa (estilo MangaFlix)
-
-```python
-from media_bot import MediaBot
-
-bot = MediaBot()
-
-# Buscar Dandadan completo (do cap. 1 ao último)
-collection = bot.search_complete_series("Dandadan", media_type="manga")
-```
-
-### Exemplo 2: Buscar intervalo específico
-
-```python
-# Buscar One Piece do volume 1 ao 100
-collection = bot.search_and_download(
-    series_name="One Piece",
-    media_type="manga",
-    from_volume=1,
-    to_volume=100
-)
-```
-
-### Exemplo 3: Adicionar item manualmente
-
-```python
-# Adicionar um item encontrado manualmente
-bot.add_manual_item(
-    series_name="Batman",
-    media_type="hq",
-    title="Batman Volume 1.pdf",
-    url="https://exemplo.com/batman-vol-1.pdf",
-    volume=1,
-    format_type="pdf"
-)
-```
-
-### Exemplo 4: Verificar status de coleção
-
-```python
-# Verificar se há itens faltantes
-status = bot.get_collection_status("Dandadan")
-if status:
-    print(f"Completa: {status.complete}")
-    print(f"Itens faltantes: {status.missing_items}")
-```
-
-## Estrutura de Diretórios Gerada
-
-```
-collections/
-├── collection_database.json    # Banco de dados das coleções
-├── manga/
-│   └── dandadan/
-│       ├── volume_001/
-│       ├── volume_002/
-│       ├── capitulo_015/
-│       └── ...
-├── hq/
-│   └── batman/
-│       └── ...
-└── manhwa/
-    └── solo_leveling/
-        └── ...
-```
-
-## Formatos Suportados
-
-- 📄 **PDF** - Livros, mangás, artigos
-- 📖 **EPUB** - E-books
-- 📚 **CBZ/CBR** - Quadrinhos digitais, mangás
-
-## Tipos de Mídia
-
-- `manga` - Mangás japoneses
-- `livro` - Livros e romances
-- `hq` - Histórias em quadrinhos ocidentais
-- `manhwa` - Quadrinhos coreanos
-- `artigo` - Artigos e papers acadêmicos
-
-## Métodos Principais
-
-| Método | Descrição |
-|--------|-----------|
-| `search_complete_series(name, type)` | Busca série completa do 1º ao último item |
-| `search_and_download(name, type, from, to)` | Busca intervalo específico |
-| `add_manual_item(...)` | Adiciona item manualmente |
-| `list_all_collections()` | Lista todas as coleções |
-| `get_collection_status(name)` | Obtém status de uma coleção |
-| `find_missing_items(name)` | Retorna itens faltantes |
-
-## Recursos Avançados
-
-### Detecção Automática de Metadados
-
-O bot extrai automaticamente informações dos títulos:
-
-- `"Dandadan Volume 1.pdf"` → volume: 1
-- `"Dandadan Capítulo 15.cbz"` → chapter: 15
-- `"One Piece #100.pdf"` → number: "100"
-
-### Padrões Reconhecidos
-
-**Volumes:**
-- `Volume 1`, `Vol. 1`, `V1`, `Tomo 1`
-
-**Capítulos:**
-- `Capítulo 15`, `Cap 15`, `Ch. 15`, `C15`, `Episode 15`
-
-**Numeração:**
-- `#100`, `#45A`
-
-## Executando o Bot
-
-```bash
-python media_bot.py
-```
-
-## Interface Gráfica (Desktop)
-
-A interface oficial agora é uma janela desktop moderna (pywebview):
+## 🚀 Início rápido
 
 ```bash
 py -3.13 -m pip install -r requirements.txt
 py -3.13 desktop.py
 ```
 
-Abas disponíveis:
-- **Dashboard** — totais da biblioteca (séries, itens, completas, faltantes)
-- **Buscar** — pesquisa em todas as fontes com resultados em cards
-- **Biblioteca** — cards visuais por série com capa, progresso, status e exportação Komga/Kavita
-- **Downloads** — progresso e log em tempo real
-- **Ferramentas** — limpar cache e status do grafo
+> Neste ambiente use o launcher **`py -3.13`** (o `python` do PATH pode estar quebrado).
 
-Para gerar o executável clicável (`dist/MediaBot.exe`):
+Ou gere o **executável clicável** e rode com duplo-clique:
 
 ```bash
-py -3.13 build.py
+py -3.13 build.py      # gera dist/MediaBot.exe
 ```
 
-> A GUI antiga em Tkinter foi preservada em `legacy/gui_app.py`.
+---
 
-## CLI
+## ✨ Funcionalidades
 
-O bot agora possui uma interface de linha de comando simples:
+### 🔎 Busca multi-fonte, com idioma
+- **Mangá/manhwa/HQ** → **MangaDex** (API oficial).
+- **Livros/artigos** → **Archive.org** + **Project Gutenberg** (domínio público / acervo aberto).
+- **Seletor de idioma na busca** (Qualquer / Português / Inglês / Espanhol) — filtra livros/artigos por idioma; cada resultado mostra o idioma real.
+- Resultados em cards com capa, fonte e formato.
+
+### 🎯 Seleção de capítulos (não trava em nada)
+- Ao abrir uma série, o app **analisa a quantidade real** e mostra: *"Capítulos 1–200 · N disponíveis · X baixados · faltam Y"*.
+- **Baixar tudo (faltantes)**, **intervalo** (de/até, com os limites reais da série), **checkboxes** por capítulo e **faixas rápidas** geradas pela quantidade real (1–50, 51–100, …).
+- Botão de **ajuda "?"** explicando o intervalo.
+
+### 🌐 Idioma primário + fallback (mangá)
+- Escolha o idioma principal (pt-br/en/es). Se um capítulo não vier nele **após esgotar as re-tentativas**, tenta o **idioma secundário** (opcional).
+- Capítulos que só existem em **versão oficial/externa** (fora do MangaDex) não falham calados: o log mostra **o link para ler**.
+
+### ⬇️ Fila de downloads persistente (gerenciador)
+- Enfileirar uma série vira **1 item por capítulo**; a fila **sobrevive entre sessões** e **retoma sozinha** ao abrir o app.
+- Estado por item (fila / baixando / concluído / falhou / cancelado), com **cancelar / re-tentar / remover**, **pausar/retomar** a fila e **limpar concluídos**.
+- Robustez: **retry por página e por capítulo**, **cancelamento que para na hora** (checado entre páginas), rate-limiting fiel às fontes (evita 429/`RemoteDisconnected`) e re-resolução de URLs expiradas.
+
+### 🏷️ Metadados prontos para Komga/Kavita
+- Cada **CBZ** novo já sai com **`ComicInfo.xml`** na raiz (Série, Capítulo, Volume, Autor, Idioma…), preenchido com dados do **Jikan/AniList**. Komga/Kavita/YACReader leem tudo automaticamente.
+- **Exportação Komga/Kavita** com um clique (organiza em `Série/Chapter NNN/…`).
+
+### 📁 Onde os arquivos ficam
+- **Pasta de downloads configurável** (Ferramentas → *Escolher pasta*), com a escolha **salva** entre sessões.
+- Botões **"Abrir pasta"** (downloads e export) para achar os arquivos no Explorer.
+- Formatos: **CBZ** (mangá/imagens), **PDF/EPUB/DJVU/…** (livros — extensão detectada da fonte).
+
+### 🖥️ Biblioteca e visão geral
+- **Biblioteca** em cards com **capa** (Jikan/AniList), progresso e status; ações de **Status** e **Exportar** por série.
+- **Dashboard** com totais (séries, itens baixados, coleções completas, faltantes).
+
+### 🎨 UI/UX
+- Visual **minimalista**, tema escuro, **ícones SVG** (sem CDN), aplicando as **10 heurísticas de Nielsen** (visibilidade de estado, prevenção/recuperação de erro, confirmações, atalhos, persistência de preferências…).
+
+---
+
+## 🗂️ Tipos de mídia e fontes
+
+| Tipo | Fonte(s) | Formato típico |
+|------|----------|----------------|
+| `manga`, `manhwa`, `hq` | MangaDex | CBZ |
+| `livro` | Archive.org, Project Gutenberg | PDF / EPUB |
+| `artigo` | Archive.org | PDF |
+
+---
+
+## 💻 CLI (opcional)
+
+Além da interface gráfica, há uma CLI simples:
 
 ```bash
-# Buscar uma série em todas as fontes
-python media_bot.py search "Dandadan" --media-type manga
-
-# Baixar uma série completa
-python media_bot.py download "Dandadan" --media-type manga --source mangadex
-
-# Ver status de uma coleção
-python media_bot.py status "Dandadan"
-
-# Listar biblioteca local
-python media_bot.py library
-
-# Limpar cache local
-python media_bot.py cache-clear
-
-# Ver resumo do grafo gerado pelo graphify
-python media_bot.py graph-status
+py -3.13 media_bot.py search "Dandadan" --media-type manga
+py -3.13 media_bot.py download "Dandadan" --media-type manga --source mangadex
+py -3.13 media_bot.py status "Dandadan"
+py -3.13 media_bot.py library
+py -3.13 media_bot.py cache-clear
+py -3.13 media_bot.py graph-status
 ```
 
-## Logs
+---
 
-Os logs são salvos em `media_bot.log` e também exibidos no console.
+## 🧱 Arquitetura (visão geral)
 
-## Personalização
+- **`desktop.py`** — entrypoint da GUI (pywebview) · **`frontend/`** — SPA local (sem CDN).
+- **`app/`** — ponte e serviços:
+  - `bot_service.py` — **worker serial** que executa todas as operações do bot (a Session SQLite nunca é tocada por duas threads).
+  - `api.py` — ponte JS↔Python + **runner da fila**.
+  - `output_writer.py` (CBZ + ComicInfo), `komga_exporter.py`, `metadata_enricher.py` (Jikan/AniList), `settings_store.py`.
+- **`media_bot.py`** — orquestra scrapers, download, retry/fallback e biblioteca.
+- **`download_queue.py`** — fila persistente (SQLite) · **`database.py`** — modelos + `session_scope`.
+- **`scrapers/`** — `mangadex_scraper`, `archive_scraper`, `gutenberg_scraper` (contrato comum em `base_scraper`).
+- **`library_manager.py`** — biblioteca, itens faltantes, exportação.
 
-### Ajustar Delay de Pesquisa
+Executável via **`build.py`** (PyInstaller `--onefile --windowed`). A GUI antiga em Tkinter fica em `legacy/gui_app.py`.
 
-```python
-bot = MediaBot()
-bot.searcher.search_delay = 2.0  # Aumentar delay para 2 segundos
+---
+
+## 🧪 Testes
+
+```bash
+py -3.13 -m pytest -q
 ```
 
-### Adicionar Novos Formatos
+---
 
-```python
-bot.supported_formats.extend([txt, mobi])
-```
+## ⚠️ Notas
 
-## Notas Importantes
+- **Interpretador:** use `py -3.13`.
+- **Aviso legal:** ferramenta de organização/pesquisa. Baixe apenas conteúdo disponível legalmente e respeite os direitos autorais e os termos de uso das fontes.
+- Fontes de mangá com API aberta e estável são escassas — o app usa o **MangaDex** (a mais confiável). Capítulos apenas "oficiais/externos" não são baixáveis de forma estável em lugar nenhum; nesses casos o app informa o link.
 
-⚠️ **Aviso Legal**: Este bot é uma ferramenta de organização e pesquisa. Certifique-se de baixar apenas conteúdo disponível legalmente e respeite os direitos autorais.
+---
 
-⚠️ **Scraping**: A implementação atual é um esqueleto funcional. Para produção, você precisará implementar scrapers específicos para cada site fonte, respeitando seus termos de uso e robots.txt.
-
-## Próximos Passos Sugeridos
-
-1. Implementar scrapers específicos para sites de sua preferência
-2. Adicionar suporte a download automático de arquivos
-3. Integrar com APIs de serviços legítimos
-4. Adicionar interface web ou GUI
-5. Implementar busca por OCR em imagens
-6. Adicionar suporte a metadados avançados (autor, editora, ano)
-
-## Licença
-
-Use este código de forma responsável e ética.
+*Media Bot PT-BR — By Munhoz.*
