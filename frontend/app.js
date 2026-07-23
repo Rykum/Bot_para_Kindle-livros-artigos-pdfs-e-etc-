@@ -20,6 +20,16 @@ function api() {
   return window.pywebview && window.pywebview.api;
 }
 
+// --- ícones (SVG inline estilo linha, sem CDN) ---
+const _SVG = (p) =>
+  `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const ICON = {
+  book: _SVG('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'),
+  download: _SVG('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+  check: _SVG('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'),
+  alert: _SVG('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
+};
+
 // --- job de listagem de capítulos em andamento (para tratar erro no seletor) ---
 let currentChaptersJob = null;
 
@@ -45,12 +55,12 @@ on("log", (p) => {
 });
 on("job_started", (p) => { logEl().textContent += `\n=== ${p.label} ===\n`; });
 on("job_done", (p) => {
-  logEl().textContent += `✅ ${p.label} concluído.\n`;
+  logEl().textContent += `[ok] ${p.label} concluído.\n`;
   logEl().scrollTop = logEl().scrollHeight;
 });
 // #9 Recuperação: erro amigável
 on("job_error", (p) => {
-  logEl().textContent += `⚠️ ${p.label}: ${p.error}\n`;
+  logEl().textContent += `[erro] ${p.label}: ${p.error}\n`;
   logEl().scrollTop = logEl().scrollHeight;
   if (p.job_id === currentChaptersJob) {
     document.getElementById("chapters-summary").textContent =
@@ -251,7 +261,7 @@ async function loadLibrary() {
     div.innerHTML = `
       <img class="cover" src="${COVER_PLACEHOLDER}" alt="capa" />
       <h3>${s.title}</h3>
-      <p class="muted">${s.is_complete ? "✅ Completa" : "⏳ " + pct + "%"}</p>
+      <p class="muted">${s.is_complete ? '<span style="color:var(--success)">Completa</span>' : pct + "% concluído"}</p>
       <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
       <p class="muted">${s.chapters_downloaded}/${s.total_chapters_registered} caps</p>
       <div class="actions" style="margin-top:12px">
@@ -284,13 +294,13 @@ async function loadDashboard() {
   const s = await api().dashboard_stats();
   box.innerHTML = "";
   const cards = [
-    ["📚", "Séries", s.total_series], ["⬇️", "Itens baixados", s.total_downloaded],
-    ["✅", "Coleções completas", s.complete_collections], ["🧩", "Itens faltantes", s.missing_total],
+    [ICON.book, "Séries", s.total_series], [ICON.download, "Itens baixados", s.total_downloaded],
+    [ICON.check, "Coleções completas", s.complete_collections], [ICON.alert, "Itens faltantes", s.missing_total],
   ];
   cards.forEach(([ico, label, value]) => {
     const div = document.createElement("div");
     div.className = "card stat-card";
-    div.innerHTML = `<div class="ico">${ico}</div><div class="stat">${value}</div><p class="muted">${label}</p>`;
+    div.innerHTML = `${ico}<div class="stat">${value}</div><p class="muted">${label}</p>`;
     box.appendChild(div);
   });
 }

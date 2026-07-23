@@ -9,14 +9,32 @@
 <body>
   <div id="app">
     <aside class="sidebar">
-      <div class="brand"><span>📚</span> Media Bot</div>
+      <div class="brand">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        Media Bot
+      </div>
       <div class="brand-sub">Biblioteca PT-BR</div>
       <nav>
-        <button class="nav-item active" data-view="dashboard"><span class="ico">📊</span> Dashboard</button>
-        <button class="nav-item" data-view="search"><span class="ico">🔎</span> Buscar</button>
-        <button class="nav-item" data-view="library"><span class="ico">📖</span> Biblioteca</button>
-        <button class="nav-item" data-view="downloads"><span class="ico">⬇️</span> Downloads</button>
-        <button class="nav-item" data-view="tools"><span class="ico">⚙️</span> Ferramentas</button>
+        <button class="nav-item active" data-view="dashboard">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-view="search">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Buscar
+        </button>
+        <button class="nav-item" data-view="library">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Biblioteca
+        </button>
+        <button class="nav-item" data-view="downloads">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Downloads
+        </button>
+        <button class="nav-item" data-view="tools">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Ferramentas
+        </button>
       </nav>
       <div class="sidebar-foot">
         <span id="conn-state">Conectando…</span>
