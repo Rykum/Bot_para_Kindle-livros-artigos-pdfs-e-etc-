@@ -42,22 +42,32 @@ class Api:
         return {"job_id": self._service.submit(f"Busca: {query}", fn)}
 
     def download_series(self, series: str, media_type: str = "manga",
-                        source: str = "mangadex") -> Dict[str, str]:
+                        source: str = "mangadex", chapters=None,
+                        language: str = "pt-br", fallback_language: Optional[str] = None) -> Dict[str, str]:
         job_holder: Dict[str, Optional[str]] = {"id": None}
 
         def fn(bot, emit):
             def progress(label, current, total):
                 emit("progress", {"label": label, "current": current, "total": total})
-            bot.download_complete_series(
+            return bot.download_complete_series(
                 series, media_type=media_type, source_name=source,
                 progress_callback=progress,
                 should_cancel=lambda: self._service.is_cancelled(job_holder["id"]),
+                chapters=chapters, language=language, fallback_language=fallback_language,
             )
-            return {"done": True}
 
         job_id = self._service.submit(f"Download: {series}", fn)
         job_holder["id"] = job_id
         return {"job_id": job_id}
+
+    def list_chapters(self, series: str, media_type: str = "manga", source: str = "mangadex",
+                      language: str = "pt-br", fallback_language: Optional[str] = None) -> Dict[str, str]:
+        def fn(bot, emit):
+            data = bot.list_series_chapters(series, media_type=media_type, source_name=source,
+                                            language=language, fallback_language=fallback_language)
+            emit("chapters_list", data)
+            return {"count": len(data.get("available", []))}
+        return {"job_id": self._service.submit(f"Capítulos: {series}", fn)}
 
     # --- síncronos ---
     def library(self) -> Any:

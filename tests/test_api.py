@@ -117,7 +117,8 @@ class CancelableFakeBot:
         self._proceed = proceed
 
     def download_complete_series(self, series, media_type, source_name,
-                                  progress_callback, should_cancel):
+                                  progress_callback, should_cancel,
+                                  chapters=None, language="pt-br", fallback_language=None):
         self._holder["should_cancel"] = should_cancel
         self._proceed.wait(timeout=2)
         self._holder["result"] = should_cancel()
