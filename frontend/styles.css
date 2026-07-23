@@ -4,37 +4,36 @@
    ============================================================ */
 
 :root {
-  /* superfícies */
-  --bg: #0b1120;
-  --bg-grad: radial-gradient(1200px 600px at 100% -10%, #14213b 0%, #0b1120 55%);
-  --surface: #111a2e;
-  --surface-2: #16223c;
-  --surface-3: #1b2942;
-  --border: #22314f;
-  --border-soft: #1a2740;
+  /* superfícies — minimalista, plano */
+  --bg: #0d1420;
+  --surface: #121a28;
+  --surface-2: #161f2f;
+  --surface-3: #1b2536;
+  --border: #212c3d;
+  --border-soft: #1a2333;
 
   /* texto */
-  --text: #e8edf6;
-  --muted: #93a1bd;
-  --faint: #64748b;
+  --text: #e6ebf3;
+  --muted: #8c99ac;
+  --faint: #5c6a7e;
 
-  /* acentos */
-  --accent: #3b82f6;
-  --accent-hover: #2f74ee;
-  --accent-soft: rgba(59, 130, 246, .15);
-  --success: #10b981;
-  --success-soft: rgba(16, 185, 129, .15);
-  --warn: #f59e0b;
-  --warn-soft: rgba(245, 158, 11, .15);
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, .15);
+  /* acento único, contido */
+  --accent: #4b8bf4;
+  --accent-hover: #3d7ce8;
+  --accent-soft: rgba(75, 139, 244, .12);
+  --success: #34b98a;
+  --success-soft: rgba(52, 185, 138, .12);
+  --warn: #d99a3a;
+  --warn-soft: rgba(217, 154, 58, .12);
+  --danger: #e06666;
+  --danger-soft: rgba(224, 102, 102, .12);
 
-  /* forma */
+  /* forma — sem sombras (flat) */
   --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
+  --r-md: 10px;
+  --r-lg: 14px;
+  --shadow: none;
+  --shadow-sm: none;
   --ring: 0 0 0 3px var(--accent-soft);
 
   /* escala de espaçamento (base 4) */
@@ -46,11 +45,9 @@ html, body { margin: 0; height: 100%; }
 body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background: var(--bg);
-  background-image: var(--bg-grad);
-  background-attachment: fixed;
   color: var(--text);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -58,9 +55,9 @@ body {
 
 /* ---------------- Sidebar ---------------- */
 .sidebar {
-  width: 248px;
+  width: 240px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #101a30 0%, #0c1424 100%);
+  background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -96,13 +93,22 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   background: var(--accent);
 }
 .sidebar-foot {
-  margin-top: auto; font-size: 12px; color: var(--faint);
-  padding: var(--s-3); display: flex; align-items: center; gap: var(--s-2);
+  margin-top: auto; padding: var(--s-3) var(--s-3) var(--s-1);
+  display: flex; flex-direction: column; gap: var(--s-3);
+  border-top: 1px solid var(--border-soft);
 }
-.sidebar-foot::before {
-  content: ""; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--success); box-shadow: 0 0 0 3px var(--success-soft);
+.sidebar-foot #conn-state {
+  font-size: 12px; color: var(--faint);
+  display: flex; align-items: center; gap: var(--s-2);
 }
+.sidebar-foot #conn-state::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success);
+}
+.signature {
+  font-size: 12px; color: var(--muted); letter-spacing: .3px;
+}
+.signature b { color: var(--text); font-weight: 700; }
 
 /* ---------------- Conteúdo ---------------- */
 .content { flex: 1; overflow-y: auto; padding: var(--s-8) var(--s-8); }
@@ -201,7 +207,7 @@ select { cursor: pointer; appearance: none;
   box-shadow: var(--shadow-sm);
   transition: transform .12s, border-color .12s, box-shadow .12s;
 }
-.card:hover { transform: translateY(-2px); border-color: #2c3d61; box-shadow: var(--shadow); }
+.card:hover { border-color: #2b3a52; }
 .card h3 { margin: 0 0 4px; font-size: 15px; color: #f8fafc; line-height: 1.3; }
 .card .muted { font-size: 12.5px; color: var(--muted); }
 .card .cover {
@@ -213,16 +219,13 @@ select { cursor: pointer; appearance: none;
 
 /* Cards de estatística (dashboard) */
 .stat-card { display: flex; flex-direction: column; gap: 2px; }
-.stat-card .ico {
-  width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
-  background: var(--accent-soft); font-size: 18px; margin-bottom: var(--s-3);
-}
-.stat { font-size: 30px; font-weight: 800; color: #fff; line-height: 1.1; }
+.stat-card .ico { font-size: 20px; opacity: .8; margin-bottom: var(--s-2); }
+.stat { font-size: 30px; font-weight: 700; color: #fff; line-height: 1.1; }
 .stat-card .muted { font-size: 12.5px; }
 
 /* ---------------- Progresso ---------------- */
 .progress { background: var(--bg); border-radius: 999px; height: 10px; overflow: hidden; margin-bottom: var(--s-2); border: 1px solid var(--border-soft); }
-.progress-bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #60a5fa); transition: width .25s; }
+.progress-bar { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
 
 /* ---------------- Grade de capítulos ---------------- */
 .chapter-grid {
