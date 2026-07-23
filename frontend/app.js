@@ -92,7 +92,7 @@ on("search_results", (p) => {
     div.innerHTML = `<h3>${r.title || r.series_name || "Sem título"}</h3>
       <p class="muted">${r.source || "?"} · ${r.format_type || r.format || "?"}</p>
       <button class="btn success">Baixar série</button>`;
-    div.querySelector("button").addEventListener("click", () => openChapters(r.title || r.series_name, r.source || "mangadex"));
+    div.querySelector("button").addEventListener("click", () => openChapters(r.title || r.series_name, r.source || "mangadex", mtOf()));
     box.appendChild(div);
   });
 });
@@ -106,18 +106,18 @@ function goTo(view) {
 }
 
 // --- seletor de capítulos ---
-let chaptersState = { series: null, source: "mangadex", available: [], downloaded: [], byLang: {} };
+let chaptersState = { series: null, source: "mangadex", media: "manga", available: [], downloaded: [], byLang: {} };
 
 function langPrimary() { return document.getElementById("lang-primary").value; }
 function langFallback() { return document.getElementById("lang-fallback").value || null; }
 
-async function openChapters(series, source) {
-  chaptersState.series = series; chaptersState.source = source;
+async function openChapters(series, source, media) {
+  chaptersState.series = series; chaptersState.source = source; chaptersState.media = media || "manga";
   document.getElementById("chapters-title").textContent = series;
   document.getElementById("chapters-summary").textContent = "Carregando capítulos…";
   document.getElementById("chapter-grid").innerHTML = "";
   goTo("chapters");
-  await api().list_chapters(series, "manga", source, langPrimary(), langFallback());
+  await api().list_chapters(series, chaptersState.media, source, langPrimary(), langFallback());
 }
 on("chapters_list", (d) => {
   chaptersState.available = d.available || [];
@@ -135,7 +135,7 @@ function renderChapterGrid() {
   const done = new Set(chaptersState.downloaded);
   chaptersState.available.forEach((num) => {
     const isDone = done.has(num);
-    const langs = (chaptersState.byLang[num] || []).join(", ");
+    const langs = (chaptersState.byLang[num] || chaptersState.byLang[Number(num).toFixed(1)] || chaptersState.byLang[String(num)] || []).join(", ");
     const chip = document.createElement("label");
     chip.className = "chapter-chip" + (isDone ? " done" : "");
     chip.innerHTML = `<input type="checkbox" ${isDone ? "checked disabled" : ""} data-num="${num}"><span>Cap ${num}</span><span class="lang">${langs}</span>`;
@@ -172,7 +172,7 @@ function startDownload(chapters) {
   document.getElementById("progress-bar").style.width = "0%";
   document.getElementById("progress-text").textContent = "Iniciando…";
   if (cancelBtn()) cancelBtn().disabled = false;
-  api().download_series(chaptersState.series, "manga", chaptersState.source, chapters, langPrimary(), langFallback())
+  api().download_series(chaptersState.series, chaptersState.media, chaptersState.source, chapters, langPrimary(), langFallback())
     .then((ack) => { currentDownloadJob = ack && ack.job_id; });
   goTo("downloads");
 }

@@ -24,6 +24,10 @@ def test_appjs_wires_chapters_and_cancel_reset():
     # bridge intacta
     assert "window.pushEvent" in js
     assert "window.pywebview.api" in js
+    # media_type propagado (não hardcoded para "manga")
+    assert "chaptersState.media" in js
+    # lookup de by_language normalizado (chaves float serializadas como string)
+    assert "toFixed(1)" in js
 
 
 def test_styles_has_chapter_grid():
