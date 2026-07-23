@@ -41,28 +41,23 @@ class ArchiveOrgScraper(BaseScraper):
         """
         if formats is None:
             formats = ['pdf', 'epub', 'djvu']
-        
+
         results = []
-        
+
         try:
-            # Construir query para API
-            # Focar em conteúdo em português e formatos específicos
-            format_query = ' OR '.join([f'mediatype:{fmt}' for fmt in formats])
-            
-            # Query principal com filtros
-            search_query = f'({query}) AND language:(por OR portuguese OR "português")'
-            
+            # Busca por TÍTULO entre textos (livros/HQs). Não forçamos idioma —
+            # forçar "português" excluía a maioria dos livros (ex.: Star Wars em
+            # inglês) e devolvia 0 resultados. O usuário filtra pelo que quiser.
+            search_query = f'title:({query}) AND mediatype:texts'
+
             params = {
                 'q': search_query,
-                'fl[]': ['identifier', 'title', 'creator', 'year', 'language', 'mediatype'],
+                'fl[]': ['identifier', 'title', 'creator', 'year', 'language', 'mediatype', 'downloads'],
                 'sort[]': ['downloads desc'],
-                'rows': 50,
-                'page': 1,
+                'rows': 40,
                 'output': 'json',
-                'save': 'yes',
-                'fields': 'identifier,title,creator,year,language,mediatype,downloads'
             }
-            
+
             response = self.make_request(self.search_api, params=params)
             if not response:
                 return results
@@ -159,20 +154,21 @@ class ArchiveOrgScraper(BaseScraper):
             metadata = data.get('metadata', {})
             files = data.get('files', [])
             
-            # Filtrar arquivos baixáveis (PDF, EPUB, etc)
+            # Só arquivos de livro/quadrinho de verdade (evita .jpg/.xml/etc.).
+            book_exts = ('.pdf', '.epub', '.djvu', '.cbz', '.cbr', '.mobi', '.txt')
             downloadable_files = []
             for file in files:
                 name = file.get('name', '')
-                source = file.get('source', '')
-                
-                # Apenas arquivos originais ou derivados principais
-                if source == 'original' or any(name.endswith(ext) for ext in ['.pdf', '.epub', '.djvu', '.cbz']):
+                if name.lower().endswith(book_exts):
                     downloadable_files.append({
                         'name': name,
                         'size': file.get('size', 0),
-                        'format': name.split('.')[-1].lower() if '.' in name else 'unknown',
+                        'format': name.rsplit('.', 1)[-1].lower(),
                         'url': f"{self.base_url}/download/{identifier}/{name}"
                     })
+            # Prefere PDF, depois EPUB, depois o resto.
+            _priority = {'pdf': 0, 'epub': 1, 'djvu': 2, 'cbz': 3, 'cbr': 4, 'mobi': 5, 'txt': 6}
+            downloadable_files.sort(key=lambda f: _priority.get(f['format'], 9))
             
             # Extrair informações de volume/capítulo
             title = metadata.get('title', '')
