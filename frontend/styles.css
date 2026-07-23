@@ -239,6 +239,13 @@ select { cursor: pointer; appearance: none;
 .progress-bar { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
 
 /* ---------------- Grade de capítulos ---------------- */
+.quick-ranges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
+.range-chip {
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  color: var(--muted); padding: 5px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; transition: border-color .1s, color .1s;
+}
+.range-chip:hover { color: var(--text); border-color: var(--accent); }
 .chapter-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: var(--s-2); max-height: 46vh; overflow-y: auto;

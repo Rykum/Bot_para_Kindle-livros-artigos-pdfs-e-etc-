@@ -131,11 +131,54 @@ on("chapters_list", (d) => {
   chaptersState.available = d.available || [];
   chaptersState.downloaded = d.downloaded || [];
   chaptersState.byLang = d.by_language || {};
+  const nums = chaptersState.available;
   const missing = (d.missing || []).length;
-  document.getElementById("chapters-summary").textContent =
-    `${d.available.length} caps · ${d.downloaded.length} baixados · faltam ${missing}`;
+  const min = nums.length ? Math.min(...nums) : 0;
+  const max = nums.length ? Math.max(...nums) : 0;
+  document.getElementById("chapters-summary").textContent = nums.length
+    ? `Capítulos ${min}–${max} · ${nums.length} disponíveis · ${d.downloaded.length} baixados · faltam ${missing}`
+    : "Nenhum capítulo encontrado neste idioma.";
+  // Campos de intervalo passam a refletir o range REAL da série (não limita a nada).
+  const from = document.getElementById("range-from"), to = document.getElementById("range-to");
+  from.min = to.min = min; from.max = to.max = max;
+  from.placeholder = String(min); to.placeholder = String(max);
+  from.value = ""; to.value = "";
+  renderQuickRanges(min, max);
   renderChapterGrid();
 });
+
+// Faixas rápidas geradas a partir da quantidade REAL de capítulos.
+function renderQuickRanges(min, max) {
+  const box = document.getElementById("quick-ranges");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!chaptersState.available.length) return;
+  const lbl = document.createElement("span");
+  lbl.className = "muted"; lbl.textContent = "Faixas rápidas:";
+  box.appendChild(lbl);
+  const BLOCK = 50;
+  const lo = Math.floor(min), hi = Math.ceil(max);
+  if (hi - lo + 1 <= BLOCK) {
+    addRangeChip(box, lo, hi, `${min}–${max} (todos)`);
+  } else {
+    for (let start = lo; start <= hi; start += BLOCK) {
+      const end = Math.min(start + BLOCK - 1, hi);
+      addRangeChip(box, start, end, `${start}–${end}`);
+    }
+  }
+}
+function addRangeChip(box, from, to, text) {
+  const chip = document.createElement("button");
+  chip.className = "range-chip"; chip.textContent = text;
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#chapter-grid input:not([disabled])").forEach((el) => {
+      const num = parseFloat(el.dataset.num);
+      el.checked = num >= from && num <= to;
+    });
+    updateSelectedCount();
+  });
+  box.appendChild(chip);
+}
 
 function renderChapterGrid() {
   const grid = document.getElementById("chapter-grid");

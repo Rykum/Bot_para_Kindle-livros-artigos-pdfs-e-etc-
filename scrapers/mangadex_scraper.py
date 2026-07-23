@@ -124,23 +124,32 @@ class MangaDexScraper(BaseScraper):
             manga_data = response.json().get('data', {})
             attributes = manga_data.get('attributes', {})
             
-            # Obter capítulos
+            # Obter TODOS os capítulos (paginado — feed limita a 500 por página).
             chapters_url = f"{self.base_url}/manga/{manga_id}/feed"
-            params = {
-                'translatedLanguage[]': [language],
-                'order[volume]': 'asc',
-                'order[chapter]': 'asc',
-                'limit': 500,  # Máximo permitido
-                'includes[]': ['scanlation_group']
-            }
-            
-            chapters_response = self.make_request(chapters_url, params=params)
             chapters_data = []
-            
-            if chapters_response:
+            offset = 0
+            page_size = 500
+            while True:
+                params = {
+                    'translatedLanguage[]': [language],
+                    'order[volume]': 'asc',
+                    'order[chapter]': 'asc',
+                    'limit': page_size,
+                    'offset': offset,
+                    'includes[]': ['scanlation_group'],
+                }
+                chapters_response = self.make_request(chapters_url, params=params)
+                if not chapters_response:
+                    break
                 chapters_json = chapters_response.json()
-                chapters_data = chapters_json.get('data', [])
-            
+                batch = chapters_json.get('data', [])
+                chapters_data.extend(batch)
+                total = chapters_json.get('total', 0)
+                offset += len(batch)
+                # Para quando não veio página cheia ou já cobriu o total.
+                if len(batch) < page_size or (total and offset >= total):
+                    break
+
             # Processar capítulos para encontrar volumes/capítulos disponíveis
             available_chapters = []
             volumes = set()
