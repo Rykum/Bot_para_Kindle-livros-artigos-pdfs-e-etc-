@@ -30,6 +30,32 @@ def test_build_comicinfo_omits_missing():
     assert "Series" in tags
 
 
+def test_integral_numbers_render_as_int():
+    xml = OutputWriter().build_comicinfo_xml({
+        "series": "S", "number": 15.0, "volume": 2.0, "count": 120.0, "page_count": 3,
+    })
+    root = ET.fromstring(xml)
+    got = {child.tag: child.text for child in root}
+    assert got["Number"] == "15"
+    assert got["Volume"] == "2"
+    assert got["Count"] == "120"
+    assert got["PageCount"] == "3"
+
+
+def test_fractional_number_preserved():
+    xml = OutputWriter().build_comicinfo_xml({"series": "S", "number": 10.5})
+    root = ET.fromstring(xml)
+    got = {child.tag: child.text for child in root}
+    assert got["Number"] == "10.5"
+
+
+def test_control_chars_stripped():
+    xml = OutputWriter().build_comicinfo_xml({"series": "S", "number": 1, "title": "a\x00b"})
+    root = ET.fromstring(xml)  # deve parsear sem erro
+    got = {child.tag: child.text for child in root}
+    assert got["Title"] == "ab"
+
+
 def test_write_cbz_contains_comicinfo_and_pages(tmp_path):
     dest = tmp_path / "cap.cbz"
     result = OutputWriter().write_cbz(

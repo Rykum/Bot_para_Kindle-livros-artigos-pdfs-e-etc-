@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import zipfile
 from pathlib import Path
 from typing import List, Optional, Tuple
 from xml.sax.saxutils import escape
 
 _LANG_MAP = {"pt-br": "pt", "pt": "pt", "en": "en", "es": "es"}
+_INT_FIELDS = {"Number", "Volume", "Count", "PageCount"}
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
 class OutputWriter:
@@ -17,7 +20,11 @@ class OutputWriter:
 
         def add(tag: str, value) -> None:
             if value is not None and value != "":
-                parts.append(f"  <{tag}>{escape(str(value))}</{tag}>")
+                if tag in _INT_FIELDS and isinstance(value, (int, float)) and not isinstance(value, bool):
+                    if float(value).is_integer():
+                        value = int(value)
+                text = _CONTROL_CHARS_RE.sub("", str(value))
+                parts.append(f"  <{tag}>{escape(text)}</{tag}>")
 
         add("Series", meta.get("series"))
         add("Number", meta.get("number"))
