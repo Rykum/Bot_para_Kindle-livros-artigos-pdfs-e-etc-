@@ -93,3 +93,26 @@ def test_list_series_chapters_shape(monkeypatch):
         assert data["available"] == [1.0, 2.0]
     finally:
         bot.cleanup()
+
+
+def test_cancelled_chapter_not_in_failed_chapters(monkeypatch):
+    bot = make_bot()
+    try:
+        _stub_common(bot, monkeypatch, [1.0, 2.0])
+        scraper = bot._resolve_scraper("mangadex")
+        monkeypatch.setattr(
+            scraper, "get_chapter_url",
+            lambda ref, num, language="pt-br": {"download_type": "mangadex_cbz", "page_urls": ["u1"]},
+        )
+
+        def fake_mangadex_download(scraper_arg, chapter_data, series_title, chapter_num,
+                                    progress_callback=None, should_cancel=None):
+            # Simula cancelamento no meio do download (ex.: entre páginas).
+            return {"success": False, "cancelled": True, "error": "cancelled"}
+
+        monkeypatch.setattr(bot, "_download_mangadex_chapter", fake_mangadex_download)
+        summary = bot.download_complete_series("Serie", source_name="mangadex")
+        assert summary["cancelled"] is True
+        assert summary["failed_chapters"] == []
+    finally:
+        bot.cleanup()

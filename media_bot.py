@@ -9,7 +9,6 @@ Fluxo: Search -> Filter -> DB Check -> Download -> Register
 """
 
 import os
-import time
 import re
 import argparse
 import json
@@ -27,7 +26,7 @@ from scrapers.mangadex_scraper import MangaDexScraper
 from scrapers.archive_scraper import ArchiveOrgScraper
 from scrapers.gutenberg_scraper import ProjectGutenbergScraper
 from download_manager import DownloadManager
-from database import db_manager, Series
+from database import db_manager, Series, MediaFile
 from library_manager import LibraryManager
 from normalizer import ContentNormalizer
 from cache_manager import CacheManager
@@ -256,8 +255,13 @@ class MediaBot:
 
     def _attempt_chapter(self, scraper, series, series_reference: str, series_title: str,
                          chapter_num: float, source_name: str, language: str,
-                         progress_callback: Optional[Any], should_cancel: Optional[Any]) -> bool:
-        """Tenta baixar e registrar um único capítulo. Retorna True em caso de sucesso."""
+                         progress_callback: Optional[Any], should_cancel: Optional[Any]) -> str:
+        """Tenta baixar e registrar um único capítulo.
+
+        Retorna um status: "ok" (sucesso), "fail" (falha genuína, pode ser
+        re-tentada) ou "cancelled" (interrompido pelo usuário - não deve
+        contar como falha nem ser re-tentado).
+        """
         chapter_label = self._format_chapter_label(chapter_num)
         print(f"\n   ⬇️  Baixando Capítulo {chapter_label} ({language})...")
 
@@ -277,7 +281,7 @@ class MediaBot:
                     )
                 else:
                     print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
-                    return False
+                    return "fail"
             else:
                 # Executa download real
                 result = self.downloader.download(
@@ -309,17 +313,29 @@ class MediaBot:
                         sha256_hash=metadata.get('sha256', '')
                     )
                 except IntegrityError:
-                    # Conteúdo (hash) já registrado na biblioteca (deduplicação) -
-                    # trata como concluído em vez de falha a ser re-tentada.
+                    # O commit falhou (ex.: sha256_hash duplicado). Só tratamos
+                    # como sucesso idempotente se o conteúdo já estiver
+                    # genuinamente registrado como concluído no banco - caso
+                    # contrário é uma falha real (ex.: conflito espúrio) e deve
+                    # ser re-tentada.
                     self.library.session.rollback()
-                    print(f"      ♻️  Conteúdo já registrado (hash duplicado); considerado concluído.")
-                    return True
+                    existing = self.library.session.query(MediaFile).filter(
+                        MediaFile.sha256_hash == metadata.get('sha256', ''),
+                        MediaFile.download_status == 'completed'
+                    ).first()
+                    if existing:
+                        print(f"      ♻️  Conteúdo já registrado (hash duplicado); considerado concluído.")
+                        return "ok"
+                    print(f"      ❌ Falha ao registrar capítulo (conflito de integridade no banco).")
+                    return "fail"
 
                 print(f"      ✅ Sucesso! ({metadata.get('size', 0) / 1024 / 1024:.2f} MB)")
-                return True
+                return "ok"
             else:
                 print(f"      ❌ Falha no download: {result.get('error', 'Erro desconhecido')}")
-                return False
+                if result.get('cancelled'):
+                    return "cancelled"
+                return "fail"
 
         except Exception as e:
             print(f"      ❌ Erro inesperado: {e}")
@@ -330,7 +346,7 @@ class MediaBot:
                 self.library.session.rollback()
             except Exception:
                 pass
-            return False
+            return "fail"
 
     def download_complete_series(self, series_title: str, media_type: str = "manga",
                                  source_name: str = "mangadex", skip_existing: bool = True,
@@ -413,11 +429,15 @@ class MediaBot:
                         print("   ⏹️  Download cancelado pelo usuário.")
                         cancelled = True
                         break
-                    ok = self._attempt_chapter(scraper, series, series_reference, series_title,
-                                               chapter_num, source_name, language,
-                                               progress_callback, should_cancel)
-                    if ok:
+                    status = self._attempt_chapter(scraper, series, series_reference, series_title,
+                                                   chapter_num, source_name, language,
+                                                   progress_callback, should_cancel)
+                    if status == "ok":
                         downloaded_count += 1
+                    elif status == "cancelled":
+                        print("   ⏹️  Download cancelado pelo usuário.")
+                        cancelled = True
+                        break
                     else:
                         still_failed.append(chapter_num)
                 if cancelled or not still_failed:
@@ -435,11 +455,15 @@ class MediaBot:
                         print("   ⏹️  Download cancelado pelo usuário.")
                         cancelled = True
                         break
-                    ok = self._attempt_chapter(scraper, series, series_reference, series_title,
-                                               chapter_num, source_name, fallback_language,
-                                               progress_callback, should_cancel)
-                    if ok:
+                    status = self._attempt_chapter(scraper, series, series_reference, series_title,
+                                                   chapter_num, source_name, fallback_language,
+                                                   progress_callback, should_cancel)
+                    if status == "ok":
                         downloaded_count += 1
+                    elif status == "cancelled":
+                        print("   ⏹️  Download cancelado pelo usuário.")
+                        cancelled = True
+                        break
                     else:
                         still_failed.append(chapter_num)
                 pending = still_failed
