@@ -170,6 +170,7 @@ class MangaDexScraper(BaseScraper):
                     # Capítulos externos (externalUrl) não têm páginas no MangaDex.
                     'pages': chap_attrs.get('pages') or 0,
                     'external': bool(chap_attrs.get('externalUrl')),
+                    'external_url': chap_attrs.get('externalUrl'),
                 })
             
             # Determinar primeiro e último volume/capítulo
@@ -305,6 +306,14 @@ class MangaDexScraper(BaseScraper):
                 'page_count': len(page_urls),
             }
 
+        # Nenhuma versão baixável. Se só existir versão externa/oficial, informa.
+        externals = [c for c in candidates if c.get('external') and c.get('external_url')]
+        if externals:
+            return {
+                'download_type': 'external_only',
+                'external_url': externals[0]['external_url'],
+                'chapter': float(chapter_number),
+            }
         return None
 
     def fetch_page(self, page_url: str, should_cancel=None, max_attempts: int = 3):

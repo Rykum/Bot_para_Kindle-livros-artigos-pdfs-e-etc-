@@ -340,6 +340,11 @@ class MediaBot:
                         series_meta=series_meta,
                         language=language,
                     )
+                elif chapter_data and chapter_data.get('download_type') == 'external_only':
+                    # Capítulo só existe em versão oficial/externa (fora do MangaDex).
+                    print(f"      ↗️ Cap. {chapter_label}: só há versão oficial/externa "
+                          f"(não baixável aqui). Leia em: {chapter_data.get('external_url')}")
+                    return "external"
                 else:
                     print(f"      ⚠️ URL não encontrada para cap. {chapter_label}")
                     return "fail"
@@ -427,6 +432,8 @@ class MediaBot:
                                            progress_callback, should_cancel, series_meta)
             if status in ("ok", "cancelled"):
                 return status
+            if status == "external":
+                break  # só há versão externa nesta língua — re-tentar não muda
         if fallback_language:
             if should_cancel is not None and should_cancel():
                 return "cancelled"
