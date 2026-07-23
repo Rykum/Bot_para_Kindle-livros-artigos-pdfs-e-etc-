@@ -42,9 +42,11 @@ class ScrapedResult:
 
 
 class RateLimiter:
-    """Rate limiter inteligente por domínio"""
-    
-    def __init__(self):
+    """Rate limiter por domínio: delay mínimo + token-bucket por janela."""
+
+    def __init__(self, time_fn=time.time, sleep_fn=time.sleep):
+        self._time = time_fn
+        self._sleep = sleep_fn
         self.domains = {}  # domain -> last_request_time
         self.delays = {
             'default': 1.0,
@@ -53,20 +55,43 @@ class RateLimiter:
             'gutenberg.org': 2.0,
             'nyaa.si': 3.0,
         }
-    
+        self._hits = {}  # host -> list[timestamp]
+
+    def _window_for(self, host: str):
+        if host == 'api.mangadex.org':
+            return (5, 1.0)
+        if host.endswith('mangadex.network'):
+            return (40, 60.0)
+        return None
+
     def wait(self, url: str):
         """Espera o tempo necessário antes de fazer requisição"""
         domain = urlparse(url).netloc
+
+        # 1) delay mínimo fixo por domínio (comportamento existente)
         delay = self.delays.get(domain, self.delays['default'])
-        
         if domain in self.domains:
-            elapsed = time.time() - self.domains[domain]
+            elapsed = self._time() - self.domains[domain]
             if elapsed < delay:
                 sleep_time = delay - elapsed
                 logger.debug(f"Rate limit: aguardando {sleep_time:.2f}s para {domain}")
-                time.sleep(sleep_time)
-        
-        self.domains[domain] = time.time()
+                self._sleep(sleep_time)
+        self.domains[domain] = self._time()
+
+        # 2) token-bucket por janela para hosts com limite conhecido
+        window = self._window_for(domain)
+        if window:
+            max_req, seconds = window
+            hits = self._hits.setdefault(domain, [])
+            now = self._time()
+            hits[:] = [t for t in hits if now - t < seconds]
+            if len(hits) >= max_req:
+                sleep_for = seconds - (now - hits[0])
+                if sleep_for > 0:
+                    self._sleep(sleep_for)
+                now = self._time()
+                hits[:] = [t for t in hits if now - t < seconds]
+            hits.append(self._time())
 
 
 class BaseScraper(ABC):
@@ -113,11 +138,22 @@ class BaseScraper(ABC):
         try:
             # Aplicar rate limiting
             self.rate_limiter.wait(url)
-            
+
             response = self.session.get(url, params=params, timeout=self.timeout)
+
+            if response.status_code == 429 and retries < self.max_retries:
+                retry_after = response.headers.get('Retry-After')
+                try:
+                    wait_time = float(retry_after) if retry_after is not None else self.retry_backoff ** retries
+                except (TypeError, ValueError):
+                    wait_time = self.retry_backoff ** retries
+                logger.warning(f"429 recebido para {url}. Aguardando {wait_time}s (Retry-After)")
+                time.sleep(wait_time)
+                return self.make_request(url, params, retries + 1)
+
             response.raise_for_status()
             return response
-            
+
         except requests.exceptions.RequestException as e:
             if retries < self.max_retries:
                 wait_time = self.retry_backoff ** retries
