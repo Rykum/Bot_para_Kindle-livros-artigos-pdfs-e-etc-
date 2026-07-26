@@ -53,3 +53,5 @@ exports/
 # SQLite WAL
 *.db-shm
 *.db-wal
+.vercel
+.env*

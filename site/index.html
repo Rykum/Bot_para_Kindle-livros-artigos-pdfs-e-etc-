@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Media Bot PT-BR — sua biblioteca, baixada e organizada</title>
+<meta name="description" content="Aplicativo desktop em Python que busca, baixa e organiza mangás, livros, HQs e artigos — fila persistente, metadados ComicInfo.xml e exportação pronta para Komga e Kavita." />
+<meta name="author" content="Munhoz" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#08090c" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Media Bot PT-BR" />
+<meta property="og:description" content="App desktop que busca, baixa e organiza mangás, livros, HQs e artigos — com metadados prontos para Komga e Kavita." />
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237ea6ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'/%3E%3Cpath d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'/%3E%3C/svg%3E" />
+
+<link rel="preload" as="font" type="font/woff2" href="fonts/inter-var-latin.woff2" crossorigin />
+<link rel="preload" as="font" type="font/woff2" href="fonts/instrumentserif-latin.woff2" crossorigin />
+
+<style>
+/* ============================================================
+   Media Bot — landing
+   Tipografia: Instrument Serif (display) + Inter (texto/UI)
+   Paleta: near-black frio + azul funcional + creme editorial
+   Fontes auto-hospedadas — nenhuma requisição externa.
+   ============================================================ */
+
+@font-face{
+  font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url(fonts/inter-var-latin.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Instrument Serif'; font-style:normal; font-weight:400; font-display:swap;
+  src:url(fonts/instrumentserif-latin.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Instrument Serif'; font-style:italic; font-weight:400; font-display:swap;
+  src:url(fonts/instrumentserif-italic-latin.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+:root{
+  /* superfícies — near-black frio */
+  --ink-950:#08090c;
+  --ink-900:#0b0d12;
+  --ink-850:#0e1117;
+  --ink-800:#11151d;
+  --ink-750:#151a23;
+
+  /* linhas em alpha: hairlines que respiram, nunca "caixinhas" */
+  --line:rgba(255,255,255,.065);
+  --line-2:rgba(255,255,255,.11);
+  --line-3:rgba(255,255,255,.18);
+
+  /* texto — 3 níveis, sem mais */
+  --tx:#eceef3;
+  --tx-2:#98a1b2;
+  --tx-3:#616a7b;
+
+  /* acentos: azul funcional (interação) + creme editorial (voz) */
+  --blue:#7ea6ff;
+  --blue-2:#a8c3ff;
+  --blue-soft:rgba(126,166,255,.10);
+  --cream:#e8d5b0;
+
+  --ok:#5ec9a0;
+  --ok-soft:rgba(94,201,160,.12);
+  --warn:#d7a355;
+  --warn-soft:rgba(215,163,85,.10);
+
+  --r-sm:8px; --r-md:12px; --r-lg:18px;
+  --maxw:1140px;
+  --gut:28px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--ink-950);
+  color:var(--tx);
+  font-family:'Inter',system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.65;
+  font-feature-settings:"cv05" 1,"cv11" 1,"ss01" 1;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+}
+
+/* ---- textura: grão fino + brilhos radiais muito baixos ---- */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(880px 520px at 14% -8%, rgba(126,166,255,.10), transparent 62%),
+    radial-gradient(720px 460px at 92% 6%, rgba(232,213,176,.045), transparent 60%),
+    radial-gradient(1000px 700px at 50% 108%, rgba(126,166,255,.05), transparent 65%);
+}
+body::after{
+  content:"";position:fixed;inset:-50%;z-index:0;pointer-events:none;
+  opacity:.032;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+header,main,footer{position:relative;z-index:1;}
+
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gut);}
+.ico{width:18px;height:18px;flex-shrink:0;}
+a{color:inherit;}
+
+/* ============ TOPO ============ */
+header{position:sticky;top:0;z-index:40;transition:background .3s var(--ease),border-color .3s var(--ease);border-bottom:1px solid transparent;}
+body.scrolled header{background:rgba(8,9,12,.72);backdrop-filter:blur(14px) saturate(140%);border-bottom-color:var(--line);}
+.nav{display:flex;align-items:center;height:68px;gap:14px;}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--tx);font-weight:650;font-size:15px;letter-spacing:-.01em;}
+.brand .ico{width:19px;height:19px;color:var(--blue);}
+.nav nav{margin-left:auto;display:flex;align-items:center;gap:2px;}
+.nav nav a{
+  color:var(--tx-2);text-decoration:none;font-size:13.5px;font-weight:500;
+  padding:8px 13px;border-radius:var(--r-sm);transition:color .2s var(--ease);
+}
+.nav nav a:hover{color:var(--tx);}
+.nav .ghost-btn{
+  display:inline-flex;align-items:center;gap:8px;margin-left:10px;
+  border:1px solid var(--line-2);border-radius:999px;padding:8px 16px;
+  font-size:13.5px;font-weight:550;color:var(--tx);text-decoration:none;
+  transition:border-color .25s var(--ease),background .25s var(--ease);
+}
+.nav .ghost-btn:hover{border-color:var(--line-3);background:rgba(255,255,255,.04);}
+@media(max-width:760px){.nav nav a:not(.ghost-btn){display:none;}}
+
+/* ============ TIPOGRAFIA ============ */
+.serif{font-family:'Instrument Serif',Georgia,'Times New Roman',serif;font-weight:400;}
+h1{
+  font-family:'Instrument Serif',Georgia,serif;font-weight:400;
+  font-size:clamp(42px,7.2vw,80px);line-height:1.0;letter-spacing:-.018em;
+  margin:0 0 22px;color:#f6f7fa;
+}
+h1 em{font-style:italic;color:var(--cream);}
+h2{
+  font-family:'Instrument Serif',Georgia,serif;font-weight:400;
+  font-size:clamp(29px,4.4vw,46px);line-height:1.08;letter-spacing:-.015em;
+  margin:0 0 14px;color:#f6f7fa;
+}
+h2 em{font-style:italic;color:var(--cream);}
+h3{font-size:15.5px;font-weight:600;letter-spacing:-.005em;margin:0 0 7px;color:#f2f4f8;line-height:1.4;}
+.eyebrow{
+  font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--tx-3);margin:0 0 18px;display:flex;align-items:center;gap:11px;
+}
+.eyebrow::before{content:"";width:22px;height:1px;background:var(--line-3);}
+.lead{font-size:17px;line-height:1.62;color:var(--tx-2);max-width:60ch;margin:0;}
+.lead b{color:var(--tx);font-weight:550;}
+
+/* ============ SEÇÕES ============ */
+section{padding:112px 0;position:relative;}
+section + section::before{
+  content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:min(var(--maxw),calc(100% - var(--gut)*2));height:1px;
+  background:linear-gradient(90deg,transparent,var(--line-2) 22%,var(--line-2) 78%,transparent);
+}
+.section-head{margin-bottom:52px;max-width:64ch;}
+@media(max-width:700px){section{padding:80px 0;}}
+
+/* ============ HERO ============ */
+.hero{padding:96px 0 84px;text-align:center;}
+.hero .eyebrow{justify-content:center;}
+.hero h1{max-width:16ch;margin-inline:auto;}
+.hero .lead{margin-inline:auto;text-align:center;font-size:17.5px;}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:34px;}
+
+.btn{
+  display:inline-flex;align-items:center;gap:9px;justify-content:center;
+  padding:12px 22px;border-radius:999px;text-decoration:none;
+  font-size:14px;font-weight:550;letter-spacing:-.005em;
+  border:1px solid transparent;position:relative;
+  transition:transform .2s var(--ease),background .25s var(--ease),border-color .25s var(--ease),box-shadow .25s var(--ease);
+}
+.btn:active{transform:translateY(1px);}
+.btn-primary{background:var(--tx);color:var(--ink-950);box-shadow:0 1px 0 rgba(255,255,255,.5) inset;}
+.btn-primary:hover{background:#fff;box-shadow:0 0 34px rgba(126,166,255,.22),0 1px 0 rgba(255,255,255,.6) inset;}
+.btn-ghost{border-color:var(--line-2);color:var(--tx);}
+.btn-ghost:hover{border-color:var(--line-3);background:rgba(255,255,255,.035);}
+
+/* assinatura do autor */
+.byline{margin:30px 0 0;font-size:13.5px;color:var(--tx-3);letter-spacing:.01em;}
+.byline em{
+  font-family:'Instrument Serif',Georgia,serif;font-style:italic;
+  color:var(--cream);font-size:19px;letter-spacing:0;
+}
+
+/* endereço do repositório, visível como texto */
+.repo-link{
+  display:inline-flex;align-items:center;gap:11px;margin-top:30px;max-width:100%;
+  font-family:ui-monospace,"Cascadia Code",SFMono-Regular,Consolas,monospace;
+  font-size:12.5px;line-height:1.5;color:var(--tx-2);text-decoration:none;
+  border:1px solid var(--line);border-radius:999px;padding:11px 20px;
+  background:rgba(0,0,0,.28);word-break:break-all;text-align:left;
+  transition:border-color .25s var(--ease),color .25s var(--ease),background .25s var(--ease);
+}
+.repo-link .ico{width:15px;height:15px;color:var(--tx-3);transition:color .25s var(--ease);}
+.repo-link:hover{border-color:var(--line-3);color:var(--tx);background:rgba(255,255,255,.03);}
+.repo-link:hover .ico{color:var(--blue);}
+@media(max-width:560px){.repo-link{font-size:11px;padding:11px 16px;border-radius:14px;}}
+
+.meta-row{
+  display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:center;margin-top:34px;
+  font-size:12.5px;color:var(--tx-3);
+}
+.meta-row span{display:inline-flex;align-items:center;gap:8px;}
+.meta-row span::before{content:"";width:3px;height:3px;border-radius:50%;background:var(--tx-3);}
+
+/* ============ MOCK DA JANELA ============ */
+.shell{
+  margin-top:72px;position:relative;
+  border:1px solid var(--line-2);border-radius:var(--r-lg);
+  background:linear-gradient(180deg,var(--ink-850),var(--ink-900));
+  box-shadow:0 40px 90px -30px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.02) inset;
+  overflow:hidden;text-align:left;
+}
+.shell::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.045),transparent 24%);
+}
+.shell-bar{
+  display:flex;align-items:center;gap:8px;padding:13px 18px;
+  border-bottom:1px solid var(--line);background:rgba(255,255,255,.014);
+}
+.shell-bar i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.13);display:block;}
+.shell-bar b{
+  margin-left:12px;font-size:11.5px;font-weight:500;color:var(--tx-3);letter-spacing:.02em;
+}
+.shell-body{display:grid;grid-template-columns:172px 1fr;min-height:352px;}
+@media(max-width:640px){.shell-body{grid-template-columns:1fr;} .shell-side{display:none!important;}}
+
+.shell-side{
+  border-right:1px solid var(--line);padding:20px 12px;
+  display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.008);
+}
+.shell-side .cap{
+  font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--tx-3);
+  padding:0 11px 14px;font-weight:600;
+}
+.shell-side a{
+  display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:7px;
+  color:var(--tx-2);font-size:12.5px;font-weight:500;text-decoration:none;
+}
+.shell-side a .ico{width:14px;height:14px;opacity:.75;}
+.shell-side a.on{background:var(--blue-soft);color:#fff;}
+.shell-side a.on .ico{opacity:1;color:var(--blue-2);}
+
+.shell-main{padding:20px;display:flex;flex-direction:column;gap:14px;}
+.m-search{display:flex;gap:9px;}
+.m-search .fake-input{
+  flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 13px;
+  color:var(--tx-3);font-size:12px;background:rgba(0,0,0,.28);
+}
+.m-search .fake-btn{
+  border-radius:9px;padding:9px 17px;font-size:12px;font-weight:600;
+  background:var(--tx);color:var(--ink-950);
+}
+.m-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.m-stats div{border:1px solid var(--line);border-radius:10px;padding:12px 13px;background:rgba(255,255,255,.012);}
+.m-stats strong{display:block;font-size:22px;font-weight:600;color:#fff;line-height:1.15;letter-spacing:-.02em;}
+.m-stats small{color:var(--tx-3);font-size:10.5px;letter-spacing:.04em;}
+.m-queue{display:flex;flex-direction:column;gap:7px;}
+.m-queue > div{
+  display:flex;align-items:center;gap:11px;position:relative;overflow:hidden;
+  border:1px solid var(--line);border-radius:10px;padding:10px 13px;
+  font-size:12px;background:rgba(255,255,255,.012);
+}
+.m-queue p{margin:0;flex:1;color:var(--tx);}
+.m-queue p small{color:var(--tx-3);}
+.m-queue .row-dl::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:38%;
+  background:linear-gradient(90deg,rgba(126,166,255,.12),transparent);
+  animation:sweep 2.6s var(--ease) infinite;
+}
+@keyframes sweep{0%{transform:translateX(-100%);}60%,100%{transform:translateX(300%);}}
+.tag{
+  font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  padding:3px 10px;border-radius:999px;position:relative;
+}
+.tag.done{background:var(--ok-soft);color:var(--ok);}
+.tag.dl{background:var(--blue-soft);color:var(--blue-2);}
+.tag.wait{background:rgba(255,255,255,.05);color:var(--tx-3);}
+.shell-cap{margin:18px 0 0;text-align:center;font-size:12.5px;color:var(--tx-3);}
+
+/* ============ CARDS ============ */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;}
+.card{
+  background:var(--ink-950);padding:30px 26px;position:relative;isolation:isolate;
+  transition:background .3s var(--ease);
+}
+.card::before{
+  content:"";position:absolute;inset:0;z-index:-1;opacity:0;
+  background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),rgba(126,166,255,.08),transparent 65%);
+  transition:opacity .35s var(--ease);
+}
+.card:hover{background:var(--ink-900);}
+.card:hover::before{opacity:1;}
+.card .ico{width:19px;height:19px;color:var(--blue);opacity:.9;margin-bottom:18px;}
+.card p{margin:0;color:var(--tx-2);font-size:14px;line-height:1.6;}
+.card p + p{margin-top:9px;}
+.card i{font-style:italic;color:var(--tx);}
+
+code,.mono{
+  font-family:ui-monospace,"Cascadia Code",SFMono-Regular,Consolas,monospace;
+  font-size:12.5px;
+}
+code{
+  color:var(--blue-2);background:rgba(126,166,255,.07);
+  border:1px solid rgba(126,166,255,.13);padding:1px 6px;border-radius:5px;
+  white-space:nowrap;
+}
+
+/* ============ FLUXO ============ */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;counter-reset:s;position:relative;}
+.flow::before{
+  content:"";position:absolute;top:15px;left:8%;right:8%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--line-2),var(--line-2),transparent);
+}
+.step{padding:0 22px 0 0;position:relative;}
+.step .n{
+  counter-increment:s;position:relative;z-index:1;
+  display:grid;place-items:center;width:31px;height:31px;border-radius:50%;
+  background:var(--ink-850);border:1px solid var(--line-2);
+  color:var(--tx-2);font-size:12px;font-weight:600;margin-bottom:22px;
+}
+.step .n::after{content:counter(s);}
+.step p{margin:0;color:var(--tx-2);font-size:14px;line-height:1.6;}
+@media(max-width:860px){
+  .flow{grid-template-columns:1fr 1fr;row-gap:40px;}
+  .flow::before{display:none;}
+}
+@media(max-width:520px){.flow{grid-template-columns:1fr;}}
+
+/* ============ TABELA ============ */
+table{border-collapse:collapse;width:100%;min-width:540px;font-size:14.5px;}
+.table-scroll{overflow-x:auto;}
+th{
+  text-align:left;padding:0 20px 14px 0;font-size:10.5px;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--tx-3);
+  border-bottom:1px solid var(--line-2);
+}
+td{padding:20px 20px 20px 0;border-bottom:1px solid var(--line);color:var(--tx-2);vertical-align:top;}
+tr:last-child td{border-bottom:0;}
+td:first-child{color:var(--tx);font-weight:550;}
+td.mono{color:var(--tx-3);}
+
+/* ============ ARQUITETURA ============ */
+.arch{display:grid;grid-template-columns:1fr 1fr;gap:46px;align-items:start;}
+@media(max-width:880px){.arch{grid-template-columns:1fr;gap:36px;}}
+.arch-list{list-style:none;margin:0;padding:0;}
+.arch-list li{
+  display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:baseline;
+  padding:13px 0;border-bottom:1px solid var(--line);
+  font-size:13.8px;color:var(--tx-2);
+}
+.arch-list li:last-child{border-bottom:0;}
+.arch-list b{
+  font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12px;
+  color:var(--blue-2);font-weight:500;white-space:nowrap;
+}
+pre{
+  margin:0;padding:26px;border:1px solid var(--line);border-radius:var(--r-md);
+  background:rgba(0,0,0,.34);overflow-x:auto;
+  font-family:ui-monospace,"Cascadia Code",Consolas,monospace;
+  font-size:12.5px;line-height:1.9;color:#c3ccdb;
+}
+pre .c{color:var(--tx-3);}
+pre .k{color:var(--blue-2);}
+pre .s{color:var(--cream);}
+
+/* ============ NOTA ============ */
+.note{
+  border:1px solid var(--line);border-left:2px solid var(--warn);
+  border-radius:0 var(--r-md) var(--r-md) 0;
+  padding:24px 28px;background:rgba(215,163,85,.035);max-width:78ch;
+}
+.note p{margin:0;font-size:14px;line-height:1.65;color:var(--tx-2);}
+.note p + p{margin-top:11px;}
+.note b{color:var(--tx);font-weight:600;}
+
+/* ============ CTA FINAL ============ */
+.cta-final{text-align:center;padding:120px 0;}
+.cta-final h2{max-width:18ch;margin-inline:auto;}
+.cta-final .lead{margin-inline:auto;text-align:center;}
+
+/* ============ RODAPÉ ============ */
+footer{border-top:1px solid var(--line);padding:40px 0 52px;}
+.foot{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between;}
+.sig{font-size:13.5px;color:var(--tx-3);margin:0;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
+.sig b{color:var(--tx-2);font-weight:550;}
+.sig .serif{font-style:italic;color:var(--cream);font-size:19px;line-height:1.2;}
+.foot-links{display:flex;gap:24px;}
+.foot-links a{color:var(--tx-3);text-decoration:none;font-size:13.5px;transition:color .2s var(--ease);}
+.foot-links a:hover{color:var(--tx);}
+
+/* ============ ANIMAÇÕES DE ENTRADA ============ */
+[data-reveal]{
+  opacity:0;transform:translateY(14px);
+  transition:opacity .8s var(--ease),transform .8s var(--ease);
+  transition-delay:var(--d,0ms);
+}
+[data-reveal].in{opacity:1;transform:none;}
+
+::selection{background:rgba(126,166,255,.26);color:#fff;}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:4px;}
+
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.11);border-radius:999px;border:3px solid transparent;background-clip:content-box;}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2);background-clip:content-box;}
+::-webkit-scrollbar-track{background:transparent;}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *,*::before,*::after{animation:none!important;transition:none!important;}
+  [data-reveal]{opacity:1;transform:none;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Media&nbsp;Bot
+    </a>
+    <nav>
+      <a href="#recursos">Recursos</a>
+      <a href="#fluxo">Como funciona</a>
+      <a href="#fontes">Fontes</a>
+      <a href="#arquitetura">Arquitetura</a>
+      <a class="ghost-btn" href="https://github.com/Rykum/Bot_para_Kindle-livros-artigos-pdfs-e-etc-" target="_blank" rel="noopener">
+        <svg class="ico" style="width:15px;height:15px" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.8 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.5-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11 11 0 0 1 6 0C17.4 4 18.4 4.3 18.4 4.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6 4.6-1.5 7.8-5.8 7.8-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow" data-reveal>Aplicativo desktop · Python</p>
+    <h1 data-reveal>Sua biblioteca, baixada e <em>organizada sozinha</em>.</h1>
+    <p class="lead" data-reveal>
+      O <b>Media Bot PT-BR</b> busca mangás, livros, HQs e artigos em fontes abertas,
+      baixa em fila persistente e entrega os arquivos já com metadados que o
+      <b>Komga</b> e o <b>Kavita</b> leem sozinhos.
+    </p>
+
+    <div class="hero-actions" data-reveal>
+      <a class="btn btn-primary" href="https://github.com/Rykum/Bot_para_Kindle-livros-artigos-pdfs-e-etc-" target="_blank" rel="noopener">
+        <svg class="ico" style="width:16px;height:16px" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.8 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.5-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11 11 0 0 1 6 0C17.4 4 18.4 4.3 18.4 4.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6 4.6-1.5 7.8-5.8 7.8-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+        Ver o código
+      </a>
+      <a class="btn btn-ghost" href="#recursos">O que ele faz</a>
+    </div>
+
+    <p class="byline" data-reveal>Um projeto de <em>By Munhoz</em></p>
+
+    <div class="meta-row" data-reveal>
+      <span>Python 3.13</span>
+      <span>pywebview</span>
+      <span>SQLite</span>
+      <span>PyInstaller</span>
+      <span>ComicInfo.xml</span>
+    </div>
+
+    <!-- janela do app -->
+    <div class="shell" data-reveal role="img" aria-label="Interface do Media Bot: barra lateral com Dashboard, Busca, Fila e Biblioteca; painel com busca, totais e fila de downloads em andamento.">
+      <div class="shell-bar"><i></i><i></i><i></i><b>Media Bot PT-BR</b></div>
+      <div class="shell-body">
+        <div class="shell-side">
+          <span class="cap">Media Bot</span>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.35-4.35"/></svg>Busca</a>
+          <a href="#" class="on"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>Fila</a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Biblioteca</a>
+        </div>
+        <div class="shell-main">
+          <div class="m-search">
+            <div class="fake-input">Buscar série, livro ou artigo…</div>
+            <div class="fake-btn">Buscar</div>
+          </div>
+          <div class="m-stats">
+            <div><strong>14</strong><small>séries</small></div>
+            <div><strong>386</strong><small>baixados</small></div>
+            <div><strong>9</strong><small>completas</small></div>
+          </div>
+          <div class="m-queue">
+            <div><p>Dandadan <small>· cap. 112</small></p><span class="tag done">concluído</span></div>
+            <div class="row-dl"><p>Dandadan <small>· cap. 113</small></p><span class="tag dl">baixando</span></div>
+            <div><p>Dom Casmurro <small>· PDF</small></p><span class="tag wait">na fila</span></div>
+            <div><p>Berserk <small>· cap. 041</small></p><span class="tag wait">na fila</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="shell-cap" data-reveal>Interface real do app — tema escuro, ícones SVG inline, zero dependência de CDN.</p>
+  </div>
+</section>
+
+<!-- ============ RECURSOS ============ -->
+<section id="recursos">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow" data-reveal>Recursos</p>
+      <h2 data-reveal>Feito para não travar <em>no meio do caminho</em>.</h2>
+      <p class="lead" data-reveal>Cada decisão do app nasceu de um problema real: fila que morria ao fechar, capítulo que não existia no idioma escolhido, arquivo que o Komga não reconhecia.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.35-4.35"/></svg>
+        <h3>Busca multi-fonte, com idioma</h3>
+        <p>Mangá, manhwa e HQ pelo MangaDex (API oficial); livros e artigos pelo Archive.org e Project Gutenberg.</p>
+        <p>Seletor de idioma na busca — e cada resultado mostra o idioma real que veio.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <h3>Seleção de capítulos honesta</h3>
+        <p>Ao abrir uma série o app analisa a quantidade real: <i>Capítulos 1–200 · N disponíveis · X baixados · faltam Y</i>.</p>
+        <p>Baixar tudo o que falta, intervalo com limites reais, checkbox por capítulo e faixas rápidas geradas na hora.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M20 16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/></svg>
+        <h3>Fila persistente que retoma sozinha</h3>
+        <p>Enfileirar uma série vira um item por capítulo. A fila sobrevive entre sessões e volta a rodar quando o app abre.</p>
+        <p>Cancelar, re-tentar, remover, pausar/retomar e limpar concluídos — com o estado visível em cada item.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19"/><path d="M12 2.5a15 15 0 0 1 4 9.5 15 15 0 0 1-4 9.5 15 15 0 0 1-4-9.5 15 15 0 0 1 4-9.5z"/></svg>
+        <h3>Idioma primário + fallback</h3>
+        <p>Escolha o idioma principal. Se o capítulo não vier nele após esgotar as re-tentativas, o app tenta o secundário.</p>
+        <p>Capítulo que só existe em versão oficial/externa não falha calado: o log entrega o link para ler.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-8-8V3h9.6l8.4 8.4a2 2 0 0 1 0 2z"/><circle cx="7.6" cy="7.6" r="1.1" fill="currentColor" stroke="none"/></svg>
+        <h3>Metadados prontos para Komga/Kavita</h3>
+        <p>Todo CBZ novo sai com <code>ComicInfo.xml</code> na raiz — série, capítulo, volume, autor, idioma — preenchido via Jikan/AniList.</p>
+        <p>Exportação em um clique, organizando em <code>Série/Chapter NNN/</code>.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><path d="M21 3.5v6h-6"/></svg>
+        <h3>Robustez de verdade</h3>
+        <p>Retry por página <i>e</i> por capítulo, rate-limiting fiel a cada fonte — evita <code>429</code> e <code>RemoteDisconnected</code> — e re-resolução de URLs expiradas.</p>
+        <p>Cancelamento que para na hora: checado entre páginas, não no fim do capítulo.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M4 4h6a2 2 0 0 1 2 2v14"/><path d="M20 8h-6a2 2 0 0 0-2 2"/></svg>
+        <h3>Biblioteca e dashboard</h3>
+        <p>Cards com capa via Jikan/AniList, progresso e status; ações de status e exportação por série.</p>
+        <p>Totais de séries, itens baixados, coleções completas e o que ainda falta.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5.5A2.5 2.5 0 0 1 5.5 3H7"/><path d="M17 3h1.5A2.5 2.5 0 0 1 21 5.5V7"/><path d="M21 17v1.5a2.5 2.5 0 0 1-2.5 2.5H17"/><path d="M7 21H5.5A2.5 2.5 0 0 1 3 18.5V17"/><circle cx="12" cy="12" r="3"/></svg>
+        <h3>UX guiada pelas heurísticas de Nielsen</h3>
+        <p>Visibilidade do estado do sistema, prevenção e recuperação de erro, confirmações, atalhos e preferências que persistem.</p>
+        <p>Pasta de downloads configurável e botões “Abrir pasta” para achar o arquivo no Explorer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FLUXO ============ -->
+<section id="fluxo">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow" data-reveal>Como funciona</p>
+      <h2 data-reveal>Da busca ao servidor de leitura, <em>em quatro passos</em>.</h2>
+    </div>
+
+    <div class="flow">
+      <div class="step" data-reveal><span class="n"></span><h3>Busca</h3><p>Escolhe o tipo de mídia e o idioma. O scraper certo é acionado e devolve cards com capa, fonte e formato.</p></div>
+      <div class="step" data-reveal><span class="n"></span><h3>Enfileira</h3><p>Seleciona os capítulos que faltam. Cada um vira um item na fila SQLite — que sobrevive a fechar o app.</p></div>
+      <div class="step" data-reveal><span class="n"></span><h3>Baixa</h3><p>O worker serial executa com retry, rate-limit e fallback de idioma. CBZ para imagens, PDF ou EPUB para livros.</p></div>
+      <div class="step" data-reveal><span class="n"></span><h3>Organiza</h3><p>O <code>ComicInfo.xml</code> entra no CBZ e a exportação monta a árvore que Komga, Kavita e YACReader leem sozinhos.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FONTES ============ -->
+<section id="fontes">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow" data-reveal>Fontes</p>
+      <h2 data-reveal>Só o que tem <em>API aberta</em>.</h2>
+      <p class="lead" data-reveal>Nada de scraping frágil de site pirata — apenas fontes com API pública e acervo de domínio público.</p>
+    </div>
+
+    <div class="table-scroll" data-reveal>
+      <table>
+        <thead><tr><th>Tipo</th><th>Fonte</th><th>Formato de saída</th></tr></thead>
+        <tbody>
+          <tr><td>Mangá · Manhwa · HQ</td><td>MangaDex (API oficial)</td><td class="mono">CBZ + ComicInfo.xml</td></tr>
+          <tr><td>Livro</td><td>Archive.org · Project Gutenberg</td><td class="mono">PDF / EPUB / DJVU</td></tr>
+          <tr><td>Artigo</td><td>Archive.org</td><td class="mono">PDF</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ARQUITETURA ============ -->
+<section id="arquitetura">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow" data-reveal>Arquitetura</p>
+      <h2 data-reveal>Python no núcleo, <em>SPA local</em> na frente.</h2>
+      <p class="lead" data-reveal>A GUI é uma SPA servida localmente pelo pywebview. Toda operação passa por um worker serial — assim a Session do SQLite nunca é tocada por duas threads.</p>
+    </div>
+
+    <div class="arch">
+      <ul class="arch-list" data-reveal>
+        <li><b>desktop.py</b><span>Entrypoint da GUI em pywebview, abrindo a SPA local.</span></li>
+        <li><b>app/api.py</b><span>Ponte JS↔Python e runner da fila de downloads.</span></li>
+        <li><b>app/bot_service.py</b><span>Worker serial: todas as operações do bot em uma única thread.</span></li>
+        <li><b>media_bot.py</b><span>Orquestra scrapers, download, retry, fallback e biblioteca.</span></li>
+        <li><b>download_queue.py</b><span>Fila persistente em SQLite, com estado por item.</span></li>
+        <li><b>scrapers/</b><span>MangaDex, Archive.org e Gutenberg sob um contrato comum.</span></li>
+        <li><b>output_writer.py</b><span>Escreve o CBZ e injeta o ComicInfo.xml.</span></li>
+        <li><b>komga_exporter.py</b><span>Monta a árvore de pastas que os servidores leem.</span></li>
+      </ul>
+
+      <pre data-reveal><span class="c"># instalar e rodar</span>
+<span class="k">py -3.13</span> -m pip install -r requirements.txt
+<span class="k">py -3.13</span> desktop.py
+
+<span class="c"># gerar o executável clicável</span>
+<span class="k">py -3.13</span> build.py          <span class="c"># → dist/MediaBot.exe</span>
+
+<span class="c"># CLI opcional</span>
+<span class="k">py -3.13</span> media_bot.py search <span class="s">"Dandadan"</span> --media-type manga
+<span class="k">py -3.13</span> media_bot.py download <span class="s">"Dandadan"</span> --source mangadex
+<span class="k">py -3.13</span> media_bot.py status <span class="s">"Dandadan"</span>
+<span class="k">py -3.13</span> media_bot.py library
+
+<span class="c"># testes</span>
+<span class="k">py -3.13</span> -m pytest -q</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NOTA ============ -->
+<section>
+  <div class="wrap">
+    <div class="note" data-reveal>
+      <p><b>Aviso legal.</b> Ferramenta de organização e pesquisa. Baixe apenas conteúdo disponível legalmente e respeite os direitos autorais e os termos de uso de cada fonte.</p>
+      <p>Fontes de mangá com API aberta e estável são escassas — por isso o app usa o MangaDex. Capítulos apenas “oficiais/externos” não são baixáveis de forma estável em lugar nenhum; nesses casos o app informa o link em vez de falhar em silêncio.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA FINAL ============ -->
+<section class="cta-final">
+  <div class="wrap">
+    <h2 data-reveal>O código está <em>todo aberto</em>.</h2>
+    <p class="lead" data-reveal>Scrapers, fila, exportador e testes — dá para ler, rodar e adaptar.</p>
+    <div class="hero-actions" data-reveal>
+      <a class="btn btn-primary" href="https://github.com/Rykum/Bot_para_Kindle-livros-artigos-pdfs-e-etc-" target="_blank" rel="noopener">
+        <svg class="ico" style="width:16px;height:16px" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.8 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.8 2.7 1.3 3.4 1 .1-.7.4-1.3.7-1.5-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11 11 0 0 1 6 0C17.4 4 18.4 4.3 18.4 4.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6 4.6-1.5 7.8-5.8 7.8-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+        Abrir no GitHub
+      </a>
+    </div>
+
+    <div data-reveal>
+      <a class="repo-link" href="https://github.com/Rykum/Bot_para_Kindle-livros-artigos-pdfs-e-etc-" target="_blank" rel="noopener">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+        github.com/Rykum/Bot_para_Kindle-livros-artigos-pdfs-e-etc-
+      </a>
+    </div>
+
+    <p class="byline" data-reveal>Feito por <em>By Munhoz</em></p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <p class="sig">Media Bot PT-BR <span aria-hidden="true">—</span> <span class="serif">By Munhoz</span></p>
+    <div class="foot-links">
+      <a href="https://github.com/Rykum/Bot_para_Kindle-livros-artigos-pdfs-e-etc-" target="_blank" rel="noopener">Repositório</a>
+      <a href="https://github.com/Rykum" target="_blank" rel="noopener">GitHub</a>
+      <a href="#top">Topo</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* barra do topo ganha fundo ao rolar */
+  var onScroll = function(){
+    document.body.classList.toggle('scrolled', window.scrollY > 12);
+  };
+  onScroll();
+  window.addEventListener('scroll', onScroll, {passive:true});
+
+  var items = document.querySelectorAll('[data-reveal]');
+
+  if (reduced || !('IntersectionObserver' in window)) {
+    items.forEach(function(el){ el.classList.add('in'); });
+    return;
+  }
+
+  /* entrada escalonada: o atraso conta a posição do item dentro do próprio grupo */
+  items.forEach(function(el){
+    var siblings = Array.prototype.filter.call(el.parentNode.children, function(n){
+      return n.hasAttribute && n.hasAttribute('data-reveal');
+    });
+    el.style.setProperty('--d', Math.min(siblings.indexOf(el), 7) * 70 + 'ms');
+  });
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, {threshold:.1, rootMargin:'0px 0px -6% 0px'});
+
+  items.forEach(function(el){ io.observe(el); });
+
+  /* luz que segue o cursor nos cards */
+  document.querySelectorAll('.card').forEach(function(card){
+    card.addEventListener('pointermove', function(ev){
+      var r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', (ev.clientX - r.left) + 'px');
+      card.style.setProperty('--my', (ev.clientY - r.top) + 'px');
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

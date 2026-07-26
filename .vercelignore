@@ -1,0 +1,5 @@
+# Só a landing em site/ vai para a Vercel — o resto é o app desktop Python.
+*
+!site
+!site/**
+!vercel.json
