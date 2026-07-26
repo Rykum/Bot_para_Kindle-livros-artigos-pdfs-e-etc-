@@ -3,7 +3,12 @@ from app.bot_service import BotService
 
 
 class FakeBot:
-    def search_series(self, query, media_type="manga", language=None):
+    def __init__(self):
+        self.last_search = None
+
+    def search_series(self, query, media_type="manga", language=None, search_by="titulo"):
+        self.last_search = {"query": query, "media_type": media_type,
+                            "language": language, "search_by": search_by}
         return [{"title": query, "source": "mangadex", "format_type": "cbz", "url": "http://x"}]
 
     def get_library_data(self):
@@ -62,6 +67,28 @@ def test_search_is_async_and_emits_results():
             time.sleep(0.01)
         payloads = [p for n, p in events if n == "search_results"]
         assert payloads and payloads[0]["results"][0]["title"] == "Dandadan"
+    finally:
+        service.stop()
+
+
+def test_search_forwards_search_by_to_the_bot():
+    """O modo de busca escolhido na interface precisa chegar ao scraper."""
+    import time
+    events = []
+    service = BotService(bot_factory=FakeBot, event_sink=lambda n, p: events.append((n, p)))
+    api = Api(service)
+    service.start()
+    try:
+        api.search("Machado de Assis", "livro", "pt", "autor")
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if any(n == "search_results" for n, _ in events):
+                break
+            time.sleep(0.01)
+        assert service._bot.last_search == {
+            "query": "Machado de Assis", "media_type": "livro",
+            "language": "pt", "search_by": "autor",
+        }
     finally:
         service.stop()
 

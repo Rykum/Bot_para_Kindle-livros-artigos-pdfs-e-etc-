@@ -9,7 +9,7 @@ Documentação: https://api.mangadex.org/docs.html
 import logging
 import requests
 from typing import List, Dict, Optional
-from .base_scraper import BaseScraper, ScrapedResult
+from .base_scraper import BaseScraper, ScrapedResult, SourceCapabilities, SERIAL_MEDIA
 
 logger = logging.getLogger(__name__)
 
@@ -33,30 +33,60 @@ class MangaDexScraper(BaseScraper):
             'Accept': 'application/json',
         })
     
-    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
+    capabilities = SourceCapabilities(
+        media_types=SERIAL_MEDIA,
+        # A API não tem busca livre de texto: 'tudo' cai em busca por título.
+        search_modes=frozenset({'titulo', 'autor', 'tudo'}),
+    )
+
+    def _author_ids(self, name: str, limit: int = 5) -> List[str]:
+        """
+        Resolve um nome de autor para IDs. A API do MangaDex não aceita nome
+        de autor em texto livre na busca de mangás — só UUID —, então é preciso
+        passar antes pelo endpoint /author.
+        """
+        response = self.make_request(f"{self.base_url}/author",
+                                     params={'name': name, 'limit': limit})
+        if not response:
+            return []
+        return [a.get('id') for a in response.json().get('data', []) if a.get('id')]
+
+    def search(self, query: str, formats: List[str] = None, language: str = None,
+               search_by: str = "titulo") -> List[ScrapedResult]:
         """
         Pesquisa mangás na API MangaDex
-        Foca em conteúdo em português brasileiro
-        
+
         Args:
-            query: Título ou termo de pesquisa
+            query: Título ou nome de autor
             formats: Lista de formatos desejados (não aplicável para MangaDex, mas mantido por compatibilidade)
-        
+            language: não usado na busca do MangaDex (o idioma vale por capítulo)
+            search_by: 'autor' resolve o nome via /author e filtra por autoria;
+                'titulo' e 'tudo' buscam por título (a API não tem busca livre)
+
         Returns:
             Lista de ScrapedResult com mangás encontrados
         """
         results = []
-        
+        mode = self.normalize_search_by(search_by)
+
         try:
             # Endpoint de pesquisa de mangás
             search_url = f"{self.base_url}/manga"
             params = {
-                'title': query,
                 'includes[]': ['cover_art'],  # Incluir arte da capa
-                'limit': 20,
+                'limit': 40,
                 'offset': 0
             }
-            
+
+            if mode == 'autor':
+                author_ids = self._author_ids(query)
+                if not author_ids:
+                    logger.info(f"MangaDex: nenhum autor encontrado para '{query}'")
+                    return results
+                params['authors[]'] = author_ids
+            else:
+                params['title'] = query
+
             response = self.make_request(search_url, params=params)
             if not response:
                 return results

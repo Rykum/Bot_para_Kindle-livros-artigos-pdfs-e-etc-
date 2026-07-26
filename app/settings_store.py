@@ -31,3 +31,39 @@ def set_setting(key: str, value) -> None:
         _PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
+
+
+# --------------------------------------------------------------------------
+# Chaves de API das fontes que exigem cadastro (Google Books, CORE, Europeana,
+# DPLA, BHL). Ficam aqui, nunca no código — este arquivo já está no .gitignore.
+# --------------------------------------------------------------------------
+
+_API_KEYS = "api_keys"
+
+
+def get_api_key(source_name: str) -> str | None:
+    """Chave da fonte, ou None se o usuário ainda não configurou."""
+    chaves = _load().get(_API_KEYS) or {}
+    valor = chaves.get((source_name or "").strip().lower())
+    return valor.strip() if isinstance(valor, str) and valor.strip() else None
+
+
+def set_api_key(source_name: str, key: str | None) -> None:
+    """Guarda (ou apaga, com valor vazio) a chave de uma fonte."""
+    data = _load()
+    chaves = dict(data.get(_API_KEYS) or {})
+    nome = (source_name or "").strip().lower()
+    if key and key.strip():
+        chaves[nome] = key.strip()
+    else:
+        chaves.pop(nome, None)
+    data[_API_KEYS] = chaves
+    try:
+        _PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def configured_api_keys() -> list[str]:
+    """Nomes das fontes que já têm chave — para a interface mostrar o estado."""
+    return sorted((_load().get(_API_KEYS) or {}).keys())

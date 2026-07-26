@@ -41,6 +41,36 @@ class ScrapedResult:
             self.metadata = {}
 
 
+@dataclass(frozen=True)
+class SourceCapabilities:
+    """
+    O que uma fonte sabe fazer. Antes disso, decidir se um scraper servia para
+    um tipo de mídia era uma cadeia de `if` comparando `scraper.name` com
+    literais — cada fonte nova exigia editar essa cadeia.
+    """
+    #: Tipos de mídia atendidos ('manga', 'livro', 'artigo'...).
+    media_types: frozenset
+    #: Modos de busca realmente suportados.
+    search_modes: frozenset = frozenset({'titulo', 'autor', 'tudo'})
+    #: False para fontes que só sabem dizer que a obra existe (ex.: HathiTrust).
+    provides_download: bool = True
+    #: Exige chave de API — fica desligada até o usuário configurar.
+    needs_api_key: bool = False
+    #: Lê HTML em vez de API: mais frágil, quebra quando o site muda.
+    scraping_required: bool = False
+
+    def handles(self, media_type: str) -> bool:
+        """A fonte atende esse tipo de mídia?"""
+        return (media_type or '').strip().lower() in self.media_types
+
+
+#: Conjuntos reaproveitados na declaração das fontes.
+SERIAL_MEDIA = frozenset({'manga', 'manhwa', 'hq', 'comic'})
+BOOK_MEDIA = frozenset({'livro', 'book', 'artigo', 'article'})
+#: Fontes que só têm artigo — não devem poluir a busca de livro.
+ARTICLE_MEDIA = frozenset({'artigo', 'article'})
+
+
 class RateLimiter:
     """Rate limiter por domínio: delay mínimo + token-bucket por janela."""
 
@@ -115,12 +145,46 @@ class BaseScraper(ABC):
         self.max_retries = 3
         self.retry_backoff = 2.0  # Backoff exponencial
         
+    #: Modos aceitos em `search_by`. "titulo" continua sendo o padrão.
+    SEARCH_MODES = ("titulo", "autor", "tudo")
+
+    #: O que a fonte sabe fazer. Cada scraper sobrescreve com o seu.
+    capabilities = SourceCapabilities(media_types=SERIAL_MEDIA | BOOK_MEDIA)
+
+    #: Identificação honesta, para as APIs que rejeitam navegador falso.
+    API_USER_AGENT = ("MediaBot/1.0 "
+                      "(+https://github.com/Rykum/Bot_para_Kindle-livros-artigos-pdfs-e-etc-)")
+
+    def use_api_headers(self) -> None:
+        """
+        Troca os cabeçalhos de navegador por cabeçalhos de cliente de API.
+
+        O padrão desta classe se passa por Chrome pedindo `text/html`, o que faz
+        sentido para site, mas quebra API de dois jeitos: o Zenodo responde 403 a
+        User-Agent de navegador, e o DSpace do OAPEN honra o `Accept: text/html`
+        e devolve página em vez de JSON. Além disso, a política de User-Agent da
+        Wikimedia exige identificação descritiva.
+        """
+        self.session.headers.update({
+            'User-Agent': self.API_USER_AGENT,
+            'Accept': 'application/json',
+        })
+
+    @staticmethod
+    def normalize_search_by(search_by: Optional[str]) -> str:
+        """Normaliza o modo de busca; qualquer valor inválido vira 'titulo'."""
+        mode = (search_by or "").strip().lower()
+        return mode if mode in BaseScraper.SEARCH_MODES else "titulo"
+
     @abstractmethod
-    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
+    def search(self, query: str, formats: List[str] = None, language: str = None,
+               search_by: str = "titulo") -> List[ScrapedResult]:
         """
         Pesquisa por título/serie.
         `language` (opcional): filtra por idioma quando a fonte suportar
         (ex.: pt/en/es). Scrapers que não usam idioma podem ignorá-lo.
+        `search_by`: 'titulo' (padrão), 'autor' ou 'tudo' (qualquer campo).
+        Fontes que não distinguem os campos podem ignorá-lo.
         """
         pass
     

@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 from app.bot_service import BotService
 from app.komga_exporter import KomgaExporter
 from app.metadata_enricher import MetadataEnricher
+from app.where_to_find import onde_encontrar
 from download_queue import DownloadQueue
 
 
@@ -50,10 +51,15 @@ class Api:
             pass
 
     # --- assíncronos ---
-    def search(self, query: str, media_type: str = "manga", language: str = None) -> Dict[str, str]:
+    def search(self, query: str, media_type: str = "manga", language: str = None,
+               search_by: str = "titulo") -> Dict[str, str]:
         def fn(bot, emit):
-            results = bot.search_series(query, media_type=media_type, language=language or None)
-            emit("search_results", {"results": results})
+            results = bot.search_series(query, media_type=media_type, language=language or None,
+                                        search_by=search_by or "titulo")
+            # Nenhuma fonte tem o arquivo: em vez de lista vazia, dizemos onde a
+            # obra pode estar legalmente (empréstimo, leitura, sebo, biblioteca).
+            sugestoes = onde_encontrar(query, idioma=language) if not results else []
+            emit("search_results", {"results": results, "onde_encontrar": sugestoes})
             return {"count": len(results)}
         return {"job_id": self._service.submit(f"Busca: {query}", fn)}
 
@@ -135,6 +141,19 @@ class Api:
 
     def open_path(self, path: str) -> Dict[str, Any]:
         return {"ok": self._open_in_explorer(path)}
+
+    def open_external(self, url: str) -> Dict[str, Any]:
+        """
+        Abre um endereço no navegador do usuário (destinos de "onde encontrar").
+        Só http/https: `webbrowser` abriria `file://` e afins, e a URL vem do JS.
+        """
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            return {"ok": False}
+        try:
+            import webbrowser
+            return {"ok": bool(webbrowser.open(url))}
+        except Exception:
+            return {"ok": False}
 
     def choose_download_dir(self) -> Dict[str, Any]:
         """Abre o seletor de pasta nativo e aplica a escolha (persistida)."""

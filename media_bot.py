@@ -13,6 +13,9 @@ import re
 import time
 import argparse
 import json
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeout
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -22,9 +25,16 @@ from urllib.parse import urlparse
 from sqlalchemy.exc import IntegrityError
 
 # Imports dos módulos reais
+from scrapers.base_scraper import BaseScraper
 from scrapers.mangadex_scraper import MangaDexScraper
 from scrapers.archive_scraper import ArchiveOrgScraper
 from scrapers.gutenberg_scraper import ProjectGutenbergScraper
+from scrapers.openlibrary_scraper import OpenLibraryScraper
+from scrapers.wikisource_scraper import WikisourceScraper
+from scrapers.oapen_scraper import OapenScraper
+from scrapers.zenodo_scraper import ZenodoScraper
+from scrapers.openalex_scraper import OpenAlexScraper
+from scrapers.arxiv_scraper import ArxivScraper
 from download_manager import DownloadManager
 from database import db_manager, Series, MediaFile
 from library_manager import LibraryManager
@@ -57,10 +67,24 @@ class MediaBot:
         self.normalizer = ContentNormalizer()
         
         # Inicializa scrapers disponíveis
+        #: Quanto esperar pelo conjunto das fontes antes de seguir sem as que
+        #: faltam. Medido: a mais lenta (OAPEN) leva ~11 s sozinha, e sob
+        #: concorrência passava dos 20 s antigos — perdendo duas fontes por
+        #: busca. 30 s dá folga sem deixar a interface travada indefinidamente.
+        self.search_timeout = 30
+
+        # Open Library vem antes do Archive.org de propósito: ela resolve a obra
+        # certa (autor, ISBN, exemplar) e seus resultados aparecem primeiro.
         self.scrapers = [
             MangaDexScraper(),
+            OpenLibraryScraper(),
+            WikisourceScraper(),
             ArchiveOrgScraper(),
-            ProjectGutenbergScraper()
+            ProjectGutenbergScraper(),
+            OapenScraper(),
+            ZenodoScraper(),
+            OpenAlexScraper(),
+            ArxivScraper()
         ]
         
         print(f"✅ Media Bot inicializado. Downloads em: {self.base_dir.absolute()}")
@@ -111,16 +135,26 @@ class MediaBot:
         return mapping.get(media_type)
 
     def _scraper_applicable(self, scraper, media_type: str) -> bool:
+        """
+        Cada fonte declara os tipos que atende em `capabilities`. Antes isso era
+        uma cadeia de `if` comparando nomes — cada fonte nova exigia editá-la.
+        """
+        capabilities = getattr(scraper, "capabilities", None)
+        if capabilities is None:
+            return True
+
+        # Fonte que exige cadastro fica fora enquanto não houver chave. Sem isso
+        # ela entraria na busca só para falhar com 401 e gastar o orçamento de
+        # tempo de todas as outras.
+        if capabilities.needs_api_key:
+            from app.settings_store import get_api_key
+            if not get_api_key(scraper.name):
+                return False
+
         media_type = (media_type or "").strip().lower()
-        scraper_name = scraper.name.lower()
-
-        if media_type in {"manga", "manhwa", "hq", "comic"}:
-            return scraper_name in {"mangadex", "archive.org"}
-
-        if media_type in {"livro", "book", "artigo", "article"}:
-            return scraper_name in {"archive.org", "project gutenberg"}
-
-        return True
+        if not media_type:
+            return True
+        return capabilities.handles(media_type)
 
     def _resolve_series_reference(self, scraper, series_title: str, media_type: str) -> str:
         """Resolve o título digitado para a URL/identificador real da fonte."""
@@ -246,40 +280,111 @@ class MediaBot:
             }
 
     def search_series(self, query: str, media_type: str = "manga",
-                      language: Optional[str] = None) -> List[Dict[str, Any]]:
+                      language: Optional[str] = None,
+                      search_by: str = "titulo") -> List[Dict[str, Any]]:
         """
         Busca série em todos os scrapers disponíveis.
         `language` (opcional) filtra por idioma nas fontes que suportam (livros).
+        `search_by` escolhe o campo: 'titulo' (padrão), 'autor' ou 'tudo'.
         Retorna lista unificada de resultados.
         """
-        print(f"\n🔍 Buscando por: '{query}' ({media_type}, idioma={language or 'qualquer'})...")
-        cache_key = f"search::{query.strip().lower()}::{media_type.strip().lower()}::{(language or '').lower()}"
+        search_by = BaseScraper.normalize_search_by(search_by)
+        campo = {'titulo': 'título', 'autor': 'autor', 'tudo': 'qualquer campo'}[search_by]
+        print(f"\n🔍 Buscando por: '{query}' ({media_type}, por={campo}, idioma={language or 'qualquer'})...")
+        cache_key = (f"search::{query.strip().lower()}::{media_type.strip().lower()}"
+                     f"::{(language or '').lower()}::{search_by}")
         cached_results = self.cache.get(cache_key, max_age_seconds=24 * 3600)
         if cached_results is not None:
             print("   💾 Resultado recuperado do cache.")
             return cached_results
 
-        all_results = []
         formats = self._formats_for_media_type(media_type)
+        aplicaveis = [s for s in self.scrapers
+                      if self._scraper_applicable(s, media_type)]
 
-        for scraper in self.scrapers:
-            if not self._scraper_applicable(scraper, media_type):
-                continue
-
+        # Fan-out: as fontes só fazem rede aqui, nenhuma toca o banco. Em série,
+        # cada fonte nova somava seu rate-limit ao tempo total da busca.
+        respostas: Dict[str, List[Any]] = {}
+        # Sem `with`: o context manager espera todas as threads no fim do bloco,
+        # o que anularia o timeout. O shutdown abaixo devolve o controle na hora
+        # e deixa a fonte lenta morrer sozinha no timeout de rede dela.
+        pool = ThreadPoolExecutor(max_workers=max(len(aplicaveis), 1))
+        try:
+            futuros = {
+                pool.submit(scraper.search, query, formats=formats,
+                            language=language, search_by=search_by): scraper
+                for scraper in aplicaveis
+            }
             try:
-                results = scraper.search(query, formats=formats, language=language)
-                if results:
-                    print(f"   📚 {scraper.name}: {len(results)} resultado(s)")
-                    all_results.extend(self._serialize_result(result) for result in results)
-            except Exception as e:
-                print(f"   ⚠️ Erro no scraper {scraper.name}: {e}")
-        
+                # O timeout é do conjunto: `as_completed` levanta TimeoutError no
+                # próprio gerador, então ele precisa ser capturado por fora do laço.
+                for futuro in as_completed(futuros, timeout=self.search_timeout):
+                    scraper = futuros[futuro]
+                    try:
+                        respostas[scraper.name] = futuro.result()
+                    except Exception as e:
+                        print(f"   ⚠️ Erro no scraper {scraper.name}: {e}")
+            except FuturesTimeout:
+                lentas = [s.name for f, s in futuros.items() if not f.done()]
+                print(f"   ⏱️ {', '.join(lentas)}: demorou demais, seguindo sem ela(s).")
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+        # A ordem das fontes é intencional (Open Library primeiro, por precisão),
+        # então a saída segue self.scrapers, não a ordem de chegada.
+        all_results = []
+        for scraper in aplicaveis:
+            results = respostas.get(scraper.name) or []
+            if results:
+                print(f"   📚 {scraper.name}: {len(results)} resultado(s)")
+                all_results.extend(self._serialize_result(result) for result in results)
+
+        all_results = self._dedupe_results(all_results)
+
         if not all_results:
             print("   ❌ Nenhum resultado encontrado.")
 
         self.cache.set(cache_key, all_results)
-        
+
         return all_results
+
+    @staticmethod
+    def _dedupe_key(result: Dict[str, Any]) -> str:
+        """
+        Chave de identidade de uma obra, do sinal mais forte para o mais fraco:
+        ISBN, identificador do Open Library e, por fim, título+autor
+        normalizados. Com várias fontes o mesmo livro volta repetido.
+        """
+        metadata = result.get('metadata') or {}
+        if metadata.get('isbn'):
+            return f"isbn:{metadata['isbn']}"
+        if metadata.get('openlibrary_key'):
+            return f"ol:{metadata['openlibrary_key']}"
+        if metadata.get('identifier'):
+            return f"ia:{metadata['identifier']}"
+
+        def fold(text) -> str:
+            if isinstance(text, list):
+                text = ' '.join(str(t) for t in text)
+            folded = unicodedata.normalize('NFKD', str(text or '').lower())
+            return ''.join(c for c in folded if not unicodedata.combining(c)).strip()
+
+        return f"t:{fold(result.get('title'))}|{fold(metadata.get('creator'))}"
+
+    def _dedupe_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Mantém a primeira aparição — as fontes mais precisas vêm antes."""
+        vistos = set()
+        unicos = []
+        for result in results:
+            chave = self._dedupe_key(result)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            unicos.append(result)
+        removidos = len(results) - len(unicos)
+        if removidos:
+            print(f"   🧹 {removidos} duplicata(s) entre fontes removida(s).")
+        return unicos
 
     def get_complete_series_chapters(self, series_title: str, source_name: str = "mangadex", media_type: str = "manga",
                                      language: str = "pt-br") -> List[float]:
@@ -783,8 +888,12 @@ def build_cli_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     search_parser = subparsers.add_parser("search", help="Buscar séries em todas as fontes")
-    search_parser.add_argument("query", help="Título ou termo de busca")
+    search_parser.add_argument("query", help="Título, autor ou termo de busca")
     search_parser.add_argument("--media-type", default="manga", help="Tipo de mídia: manga, livro, hq, manhwa, artigo")
+    search_parser.add_argument("--search-by", default="titulo", choices=["titulo", "autor", "tudo"],
+                               help="Campo da busca: titulo (padrão), autor ou tudo")
+    search_parser.add_argument("--language", default=None,
+                               help="Idioma dos livros/artigos: pt, en, es (padrão: qualquer)")
 
     download_parser = subparsers.add_parser("download", help="Baixar uma série completa")
     download_parser.add_argument("series", help="Nome da série")
@@ -810,7 +919,8 @@ def run_cli() -> int:
     bot = MediaBot()
     try:
         if args.command == "search":
-            results = bot.search_series(args.query, media_type=args.media_type)
+            results = bot.search_series(args.query, media_type=args.media_type,
+                                        language=args.language, search_by=args.search_by)
             if not results:
                 return 0
 
