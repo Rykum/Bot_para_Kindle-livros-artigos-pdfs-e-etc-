@@ -61,6 +61,11 @@
         <div class="panel">
           <div class="search-bar">
             <div class="search-input"><input id="q" placeholder="Título da série" value="Dandadan" /></div>
+            <select id="search-by" title="Buscar pelo campo">
+              <option value="titulo">Por título</option>
+              <option value="autor">Por autor</option>
+              <option value="tudo">Qualquer campo</option>
+            </select>
             <select id="media-type" title="Tipo de mídia">
               <option>manga</option><option>livro</option><option>hq</option><option>manhwa</option><option>artigo</option>
             </select>
@@ -73,6 +78,7 @@
             <button id="btn-search" class="btn accent">Buscar</button>
           </div>
           <div class="hint" style="margin-top:10px">O idioma filtra livros/artigos (Archive.org, Gutenberg). Para mangá, o idioma é escolhido depois, ao ver os capítulos.</div>
+          <div class="hint" id="search-by-hint" style="margin-top:6px">Não achou? <b>Qualquer campo</b> busca em todos os metadados do Archive.org e acha muito mais que só pelo título.</div>
         </div>
         <div id="search-results" class="card-grid"></div>
       </section>

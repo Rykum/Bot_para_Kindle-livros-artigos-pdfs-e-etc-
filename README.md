@@ -25,11 +25,22 @@ py -3.13 build.py      # gera dist/MediaBot.exe
 
 ## ✨ Funcionalidades
 
-### 🔎 Busca multi-fonte, com idioma
-- **Mangá/manhwa/HQ** → **MangaDex** (API oficial).
-- **Livros/artigos** → **Archive.org** + **Project Gutenberg** (domínio público / acervo aberto).
+### 🔎 Busca em 9 fontes, por título ou autor
+- **Buscar por**: **Título** (padrão), **Autor** ou **Qualquer campo** — a preferência fica salva entre sessões.
 - **Seletor de idioma na busca** (Qualquer / Português / Inglês / Espanhol) — filtra livros/artigos por idioma; cada resultado mostra o idioma real.
+- As fontes são consultadas **em paralelo**, com deduplicação entre elas (por ISBN, identificador ou título+autor) e timeout: fonte lenta ou fora do ar não trava a busca.
 - Resultados em cards com capa, fonte e formato.
+
+> Buscar por autor exigiu caminho próprio em cada fonte: o Archive.org cataloga
+> invertido (*"Douglas, John E"*), e MangaDex e OpenAlex não aceitam nome em texto
+> livre — é preciso resolver o autor antes. Detalhes em `docs/AUDITORIA_FONTES.md`.
+
+### 🧭 "Onde encontrar" — quando nenhuma fonte tem o arquivo
+Acervo aberto não distribui obra sob direitos autorais. Em vez de devolver lista
+vazia, o app mostra onde a obra pode estar legalmente: **empréstimo digital**
+(Open Library, Internet Archive), **leitura online** (HathiTrust, Google Livros),
+**bibliotecas físicas próximas** (WorldCat) e **sebos** (Estante Virtual, só em
+buscas em português).
 
 ### 🎯 Seleção de capítulos (não trava em nada)
 - Ao abrir uma série, o app **analisa a quantidade real** e mostra: *"Capítulos 1–200 · N disponíveis · X baixados · faltam Y"*.
@@ -67,9 +78,23 @@ py -3.13 build.py      # gera dist/MediaBot.exe
 
 | Tipo | Fonte(s) | Formato típico |
 |------|----------|----------------|
-| `manga`, `manhwa`, `hq` | MangaDex | CBZ |
-| `livro` | Archive.org, Project Gutenberg | PDF / EPUB |
-| `artigo` | Archive.org | PDF |
+| `manga`, `manhwa`, `hq` | MangaDex, Archive.org | CBZ |
+| `livro` | **Open Library**, **Wikisource**, Archive.org, Project Gutenberg, **OAPEN**, **Zenodo** | PDF / EPUB |
+| `artigo` | **OpenAlex**, **arXiv**, Archive.org, Open Library, OAPEN, Zenodo | PDF |
+
+**O que cada fonte acrescenta:**
+
+| Fonte | Papel |
+|-------|-------|
+| **Open Library** | Camada de **precisão**: resolve título/autor para a obra certa via ISBN e aponta o exemplar no Archive.org. É o que faz `Dune` achar Frank Herbert em vez de *"Dune Buggy Rental"*. |
+| **Wikisource** | Literatura em **EPUB de texto transcrito** (pt/en/es), não scan em PDF — o melhor formato para Kindle. |
+| **OAPEN** · **Zenodo** | Livros acadêmicos de acesso aberto; o Zenodo tem muita coisa em português que não existe nas outras. |
+| **OpenAlex** · **arXiv** | Artigos com PDF aberto. O OpenAlex traz bastante SciELO. |
+| **Archive.org** · **Gutenberg** · **MangaDex** | Base original do app. |
+
+> Auditei **30 fontes** por HTTP real antes de escolher estas. O que foi reprovado
+> — e por quê — está em **[`docs/AUDITORIA_FONTES.md`](docs/AUDITORIA_FONTES.md)**,
+> junto com o plano das fases que faltam.
 
 ---
 
@@ -79,6 +104,8 @@ Além da interface gráfica, há uma CLI simples:
 
 ```bash
 py -3.13 media_bot.py search "Dandadan" --media-type manga
+py -3.13 media_bot.py search "Machado de Assis" --media-type livro --search-by autor
+py -3.13 media_bot.py search "Dom Casmurro" --media-type livro --language pt
 py -3.13 media_bot.py download "Dandadan" --media-type manga --source mangadex
 py -3.13 media_bot.py status "Dandadan"
 py -3.13 media_bot.py library
@@ -97,7 +124,11 @@ py -3.13 media_bot.py graph-status
   - `output_writer.py` (CBZ + ComicInfo), `komga_exporter.py`, `metadata_enricher.py` (Jikan/AniList), `settings_store.py`.
 - **`media_bot.py`** — orquestra scrapers, download, retry/fallback e biblioteca.
 - **`download_queue.py`** — fila persistente (SQLite) · **`database.py`** — modelos + `session_scope`.
-- **`scrapers/`** — `mangadex_scraper`, `archive_scraper`, `gutenberg_scraper` (contrato comum em `base_scraper`).
+- **`scrapers/`** — 9 fontes sob o contrato comum de `base_scraper`. Cada uma declara
+  um `SourceCapabilities` (tipos de mídia que atende, modos de busca, se oferece
+  download, se exige chave), e o roteamento consulta isso — acrescentar fonte não
+  exige editar `if` em lugar nenhum.
+- **`app/where_to_find.py`** — destinos legais quando nenhuma fonte tem o arquivo.
 - **`library_manager.py`** — biblioteca, itens faltantes, exportação.
 
 Executável via **`build.py`** (PyInstaller `--onefile --windowed`). A GUI antiga em Tkinter fica em `legacy/gui_app.py`.
@@ -107,7 +138,7 @@ Executável via **`build.py`** (PyInstaller `--onefile --windowed`). A GUI antig
 ## 🧪 Testes
 
 ```bash
-py -3.13 -m pytest -q
+py -3.13 -m pytest -q      # 212 testes
 ```
 
 ---

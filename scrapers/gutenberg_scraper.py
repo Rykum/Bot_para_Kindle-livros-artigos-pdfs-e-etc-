@@ -9,7 +9,7 @@ Foco: Livros de domínio público em português
 
 import logging
 from typing import List, Dict, Optional
-from .base_scraper import BaseScraper, ScrapedResult
+from .base_scraper import BaseScraper, ScrapedResult, SourceCapabilities, BOOK_MEDIA
 
 logger = logging.getLogger(__name__)
 
@@ -28,22 +28,39 @@ class ProjectGutenbergScraper(BaseScraper):
         )
         self.search_url = "https://gutendex.com/books"
     
-    def search(self, query: str, formats: List[str] = None, language: str = None) -> List[ScrapedResult]:
+    capabilities = SourceCapabilities(media_types=BOOK_MEDIA)
+
+    @staticmethod
+    def _matches_author(book: Dict, query: str) -> bool:
+        """Confere se algum autor do livro bate com os termos buscados."""
+        names = ' '.join(a.get('name', '') for a in book.get('authors', [])).lower()
+        terms = [t for t in query.lower().split() if len(t) > 2]
+        return bool(terms) and all(t in names for t in terms)
+
+    def search(self, query: str, formats: List[str] = None, language: str = None,
+               search_by: str = "titulo") -> List[ScrapedResult]:
         """
         Pesquisa livros no Project Gutenberg via Gutendex API
-        
+
+        O parâmetro `search` da Gutendex já cobre título E autor, então os três
+        modos usam a mesma consulta; em 'autor' os resultados são filtrados
+        para manter só os que realmente batem com o nome buscado.
+
         Args:
             query: Título, autor ou termo de pesquisa
             formats: Lista de formatos desejados ['pdf', 'epub', etc]
-        
+            language: Filtra por idioma (pt/en/es); vazio busca em pt,en,es
+            search_by: 'titulo' (padrão), 'autor' ou 'tudo'
+
         Returns:
             Lista de ScrapedResult com livros encontrados
         """
         if formats is None:
             formats = ['epub', 'pdf']
-        
+
         results = []
-        
+        mode = self.normalize_search_by(search_by)
+
         try:
             # Gutendex API. Idioma escolhido pelo usuário (pt/en/es); sem
             # escolha, busca amplo (pt,en,es) em vez de travar só em português.
@@ -62,6 +79,10 @@ class ProjectGutenbergScraper(BaseScraper):
             books = data.get('results', [])
             
             for book in books:
+                # Em 'autor', descarta o que veio por casar só com o título.
+                if mode == 'autor' and not self._matches_author(book, query):
+                    continue
+
                 title = book.get('title', 'Sem título')
                 book_id = book.get('id')
                 authors = book.get('authors', [])

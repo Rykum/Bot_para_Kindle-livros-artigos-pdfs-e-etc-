@@ -14,10 +14,10 @@ class FakeResp:
 
 def test_search_query_uses_title_and_texts_without_language(monkeypatch):
     sc = ArchiveOrgScraper()
-    captured = {}
+    queries = []
 
     def fake_make_request(url, params=None, retries=0):
-        captured["q"] = params.get("q")
+        queries.append(params.get("q"))
         return FakeResp({"response": {"docs": [
             {"identifier": "sw1", "title": "Star Wars Insider", "mediatype": "texts"},
             {"identifier": "sw2", "title": ["Star Wars: Darth Vader"], "mediatype": "texts"},
@@ -26,12 +26,14 @@ def test_search_query_uses_title_and_texts_without_language(monkeypatch):
     monkeypatch.setattr(sc, "make_request", fake_make_request)
     res = sc.search("Star Wars", formats=["pdf"])
 
-    assert "title:(Star Wars)" in captured["q"]
-    assert "mediatype:texts" in captured["q"]
-    assert "language:" not in captured["q"]          # não força português
-    assert len(res) == 2
+    # A primeira consulta continua sendo a estrita, por título. Como ela rendeu
+    # pouco, vem a consulta ampla de complemento (ver test_search_by.py).
+    assert 'title:("Star Wars")' in queries[0]
+    assert all("mediatype:texts" in q for q in queries)
+    assert all("language:" not in q for q in queries)   # não força português
+    assert len(res) == 2                                # sem duplicar identifiers
     assert res[0].title == "Star Wars Insider"
-    assert res[1].title == "Star Wars: Darth Vader"   # title em lista -> 1º elemento
+    assert res[1].title == "Star Wars: Darth Vader"     # title em lista -> 1º elemento
 
 
 def test_search_with_language_adds_filter(monkeypatch):

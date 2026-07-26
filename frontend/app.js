@@ -79,20 +79,65 @@ on("progress", (p) => {
 
 // --- busca ---
 function searchLang() { return document.getElementById("search-lang").value; }
+function searchBy() { return document.getElementById("search-by").value; }
+// #2 Correspondência com o mundo real: o campo diz o que se espera dele
+const SEARCH_BY_PLACEHOLDER = {
+  titulo: "Título da série",
+  autor: "Nome do autor (ex.: Machado de Assis)",
+  tudo: "Qualquer termo — título, autor, coleção…",
+};
+function syncSearchPlaceholder() {
+  document.getElementById("q").placeholder = SEARCH_BY_PLACEHOLDER[searchBy()] || "Buscar";
+}
+document.getElementById("search-by").addEventListener("change", syncSearchPlaceholder);
+syncSearchPlaceholder();
+
 document.getElementById("btn-search").addEventListener("click", async () => {
   const q = document.getElementById("q").value.trim();
   const mt = document.getElementById("media-type").value;
   if (!q) return;
   document.getElementById("search-results").innerHTML = '<p class="muted">Buscando…</p>';
-  await api().search(q, mt, searchLang());
+  await api().search(q, mt, searchLang(), searchBy());
 });
 // #7 Eficiência: Enter no campo de busca dispara a busca
 document.getElementById("q").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("btn-search").click();
 });
+// #1 Visibilidade do estado: "nada encontrado" não é o fim — mostramos onde procurar.
+const ONDE_ICONES = {
+  emprestimo: "Empréstimo", leitura: "Leitura online",
+  catalogo: "Biblioteca física", compra: "Comprar",
+};
+function renderOndeEncontrar(box, sugestoes) {
+  const itens = (sugestoes || []).map((s) => `
+    <div class="queue-item">
+      <div class="title">
+        <b>${s.nome}</b> <small>· ${ONDE_ICONES[s.tipo] || s.tipo}</small>
+        <div class="muted" style="font-size:12px">${s.descricao}</div>
+      </div>
+      <button class="btn sm" data-url="${s.url}">Abrir →</button>
+    </div>`).join("");
+  box.innerHTML = `
+    <div class="panel" style="grid-column:1/-1">
+      <p class="panel-title">Nenhuma fonte tem o arquivo</p>
+      <p class="muted" style="margin:0 0 16px">
+        Os acervos abertos não distribuem obra sob direitos autorais. Estes são os
+        lugares onde ela pode estar legalmente:
+      </p>
+      <div class="queue-list">${itens}</div>
+    </div>`;
+  box.querySelectorAll("button[data-url]").forEach((b) => {
+    b.addEventListener("click", () => api().open_external(b.dataset.url));
+  });
+}
+
 on("search_results", (p) => {
   const box = document.getElementById("search-results");
-  if (!p.results.length) { box.innerHTML = '<p class="muted">Nenhum resultado.</p>'; return; }
+  if (!p.results.length) {
+    if (p.onde_encontrar && p.onde_encontrar.length) renderOndeEncontrar(box, p.onde_encontrar);
+    else box.innerHTML = '<p class="muted">Nenhum resultado.</p>';
+    return;
+  }
   box.innerHTML = "";
   p.results.forEach((r) => {
     const div = document.createElement("div");
@@ -391,6 +436,7 @@ function persistPrefs() {
     lang: langPrimary(), fb: document.getElementById("lang-fallback").value,
     media: document.getElementById("media-type").value,
     slang: document.getElementById("search-lang").value,
+    sby: document.getElementById("search-by").value,
   }));
 }
 function restorePrefs() {
@@ -400,9 +446,11 @@ function restorePrefs() {
     if (p.fb !== undefined) document.getElementById("lang-fallback").value = p.fb;
     if (p.media) document.getElementById("media-type").value = p.media;
     if (p.slang !== undefined) document.getElementById("search-lang").value = p.slang;
+    if (p.sby) document.getElementById("search-by").value = p.sby;
+    syncSearchPlaceholder();
   } catch (_) {}
 }
-["lang-primary", "lang-fallback", "media-type", "search-lang"].forEach((id) => {
+["lang-primary", "lang-fallback", "media-type", "search-lang", "search-by"].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("change", persistPrefs);
 });
