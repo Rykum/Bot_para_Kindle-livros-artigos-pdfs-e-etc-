@@ -99,11 +99,24 @@ _LIVRO = (
            openlibrary="adventure stories", gutendex="adventure"),
 )
 
-# Grade pequena de propósito. Medido em collection:comics: `superhero` trouxe
-# X-Men e Spider-Man; `horror` trouxe Berserk (mangá) e `romance` derivou.
+# Grade pequena de propósito. Medido em collection:comics (top 4 por downloads):
+#   superhero (265)      -> X-Men, Amazing Spider-Man, Starman, Malibu's Genesis. PASSOU.
+#   western (418)        -> Lone Ranger, Durango Kid, Lash LaRue, Rocky Lane. PASSOU.
+#   funny animal (11)    -> Cutey Bunny, Omaha the Cat Dancer, Aniverse 1, QUACK!. PASSOU
+#                          (acervo pequeno, mas os 4 primeiros são HQ de verdade).
+#   war (254)            -> manual de manutenção do M16A1 e artbook de anime no
+#                          top 4. REPROVADO.
+#   crime (351)          -> "Opium - Manhwa Traduzido" e "Lupin III" (mangá) no
+#                          top 4. REPROVADO.
+#   romance (3654)       -> Invincible [Compendiums] (super-herói, já coberto)
+#                          e mangás no top 4. REPROVADO.
+#   horror (921)         -> MANGA: Berserk em primeiro. REPROVADO.
+#   science fiction (660)-> Invincible [Compendiums] em primeiro. REPROVADO.
 # Acrescentar gênero aqui EXIGE medir antes — ver §5.3 da spec.
 _HQ = (
     Genero("Super-heróis", (), archive="superhero"),
+    Genero("Faroeste", (), archive="western"),
+    Genero("Bichos", (), archive="funny animal"),
 )
 
 GENEROS_POR_MIDIA: Dict[str, Tuple[Genero, ...]] = {
