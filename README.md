@@ -42,6 +42,16 @@ vazia, o app mostra onde a obra pode estar legalmente: **empréstimo digital**
 **bibliotecas físicas próximas** (WorldCat) e **sebos** (Estante Virtual, só em
 buscas em português).
 
+### 🧭 Explorar por gênero
+Tela de descoberta: escolha um gênero e veja o que existe, sem digitar nada.
+
+- **Mangá e manhwa** — taxonomia oficial do MangaDex (gênero + tema), ordenados
+  por seguidores. Manhwa é o mesmo acervo filtrado por idioma de origem coreano.
+- **Livro** — Open Library e Gutendex, ordenados por relevância do gênero, com
+  a opção "mais lidos agora". Só entra o que tem exemplar baixável.
+- **HQ** — Archive.org. Lista curta de propósito: o acervo é irregular e o
+  assunto é inconsistente.
+
 ### 🎯 Seleção de capítulos (não trava em nada)
 - Ao abrir uma série, o app **analisa a quantidade real** e mostra: *"Capítulos 1–200 · N disponíveis · X baixados · faltam Y"*.
 - **Baixar tudo (faltantes)**, **intervalo** (de/até, com os limites reais da série), **checkboxes** por capítulo e **faixas rápidas** geradas pela quantidade real (1–50, 51–100, …).
@@ -138,7 +148,7 @@ Executável via **`build.py`** (PyInstaller `--onefile --windowed`). A GUI antig
 ## 🧪 Testes
 
 ```bash
-py -3.13 -m pytest -q      # 212 testes
+py -3.13 -m pytest -q      # 288 testes
 ```
 
 ---
