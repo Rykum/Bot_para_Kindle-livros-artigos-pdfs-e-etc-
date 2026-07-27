@@ -150,7 +150,7 @@ Executável via **`build.py`** (PyInstaller `--onefile --windowed`). A GUI antig
 ## 🧪 Testes
 
 ```bash
-py -3.13 -m pytest -q                      # 288 testes (6 exigem rede)
+py -3.13 -m pytest -q                      # 290 testes (6 exigem rede)
 py -3.13 -m pytest -q -m "not network"     # offline
 ```
 
