@@ -94,5 +94,34 @@ def test_background_has_grain_and_glow_like_the_landing():
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
     assert "feTurbulence" in css, "grão ausente"
     assert "radial-gradient" in css, "brilho radial ausente"
-    assert "pointer-events:none" in css.replace(" ", ""), \
-        "a textura não pode capturar clique"
+    # Verifica pointer-events:none especificamente em body::before e body::after
+    before = _regra(css, "body::before")
+    after = _regra(css, "body::after")
+    assert "pointer-events:none" in before.replace(" ", ""), \
+        "pointer-events:none ausente em body::before"
+    assert "pointer-events:none" in after.replace(" ", ""), \
+        "pointer-events:none ausente em body::after"
+
+
+def test_background_texture_matches_the_landing_exactly():
+    """A textura do app tem que ser a mesma da landing, valor por valor."""
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    landing = (FRONT.parent / "site" / "index.html").read_text(encoding="utf-8")
+
+    def gradientes(texto):
+        bloco = re.search(r'body::before\s*\{([^}]*)\}', texto).group(1)
+        # Extrai todos os radial-gradient e normaliza
+        return sorted(re.findall(r'radial-gradient\([^)]*\)', bloco))
+
+    app_grads = gradientes(css)
+    landing_grads = gradientes(landing)
+    assert app_grads == landing_grads, \
+        f"gradientes diferem:\napp: {app_grads}\nlanding: {landing_grads}"
+
+    # Verifica opacidade do grão
+    app_opacity = re.search(r'body::after\s*\{([^}]*)\}', css).group(1)
+    landing_opacity = re.search(r'body::after\s*\{([^}]*)\}', landing).group(1)
+    assert "opacity:.032" in app_opacity.replace(" ", ""), \
+        "opacidade do grão deve ser .032"
+    assert "opacity:.032" in landing_opacity.replace(" ", ""), \
+        "opacidade do grão na landing deve ser .032"
