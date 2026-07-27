@@ -5,11 +5,19 @@ from app.bot_service import BotService
 class FakeBot:
     def __init__(self):
         self.last_search = None
+        self.last_explorar = None
 
     def search_series(self, query, media_type="manga", language=None, search_by="titulo"):
         self.last_search = {"query": query, "media_type": media_type,
                             "language": language, "search_by": search_by}
         return [{"title": query, "source": "mangadex", "format_type": "cbz", "url": "http://x"}]
+
+    def explorar_genero(self, media_type, genero, subgenero=None, ordenacao="relevancia"):
+        self.last_explorar = {"media_type": media_type, "genero": genero,
+                              "subgenero": subgenero, "ordenacao": ordenacao}
+        if genero == "SemResultado":
+            return []
+        return [{"title": genero, "source": "mangadex", "metadata": {"identifier": "a"}}]
 
     def get_library_data(self):
         return [{"title": "Dandadan", "completion_percentage": 50.0, "is_complete": False}]
@@ -89,6 +97,62 @@ def test_search_forwards_search_by_to_the_bot():
             "query": "Machado de Assis", "media_type": "livro",
             "language": "pt", "search_by": "autor",
         }
+    finally:
+        service.stop()
+
+
+def test_explorar_emits_results_payload_without_onde_encontrar():
+    """Payload de explorar_results tem as 3 chaves certas; com resultado, sem sugestão."""
+    import time
+    events = []
+    api, service = make_api(events)
+    try:
+        ack = api.explorar("manga", "Terror")
+        assert "job_id" in ack
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if any(n == "explorar_results" for n, _ in events):
+                break
+            time.sleep(0.01)
+        payloads = [p for n, p in events if n == "explorar_results"]
+        assert payloads
+        payload = payloads[0]
+        assert set(["results", "genero", "onde_encontrar"]).issubset(payload.keys())
+        assert payload["genero"] == "Terror"
+        assert payload["results"][0]["title"] == "Terror"
+        assert payload["onde_encontrar"] == []
+    finally:
+        service.stop()
+
+
+def test_explorar_suggests_onde_encontrar_when_no_results():
+    """Sem resultado, cai no mesmo cartão de 'onde encontrar' da busca por texto."""
+    import time
+    events = []
+    api, service = make_api(events)
+    try:
+        api.explorar("livro", "SemResultado")
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if any(n == "explorar_results" for n, _ in events):
+                break
+            time.sleep(0.01)
+        payloads = [p for n, p in events if n == "explorar_results"]
+        assert payloads
+        assert payloads[0]["results"] == []
+        assert payloads[0]["onde_encontrar"]  # não vazio
+    finally:
+        service.stop()
+
+
+def test_generos_returns_taxonomy_for_media_type():
+    events = []
+    api, service = make_api(events)
+    try:
+        generos = api.generos("livro")
+        assert any(g["nome"] == "Terror" for g in generos)
+        terror = next(g for g in generos if g["nome"] == "Terror")
+        assert "Gótico" in terror["subgeneros"]
     finally:
         service.stop()
 
