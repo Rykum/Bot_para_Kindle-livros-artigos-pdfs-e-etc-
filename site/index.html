@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Media Bot PT-BR — sua biblioteca, baixada e organizada</title>
-<meta name="description" content="Aplicativo desktop em Python que busca, baixa e organiza mangás, livros, HQs e artigos — fila persistente, metadados ComicInfo.xml e exportação pronta para Komga e Kavita." />
+<meta name="description" content="Aplicativo desktop em Python que busca por título ou por autor em 9 fontes abertas, baixa e organiza mangás, livros, HQs e artigos — fila persistente, metadados ComicInfo.xml e exportação pronta para Komga e Kavita." />
 <meta name="author" content="Munhoz" />
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#08090c" />
@@ -521,8 +521,20 @@ footer{border-top:1px solid var(--line);padding:40px 0 52px;}
       <div class="card" data-reveal>
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.35-4.35"/></svg>
         <h3>Busca multi-fonte, com idioma</h3>
-        <p>Mangá, manhwa e HQ pelo MangaDex (API oficial); livros e artigos pelo Archive.org e Project Gutenberg.</p>
+        <p>Mangá, manhwa e HQ pelo MangaDex e Archive.org; livros e artigos por outras sete fontes, de Open Library a arXiv.</p>
         <p>Seletor de idioma na busca — e cada resultado mostra o idioma real que veio.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <h3>Busca por título, por autor ou qualquer campo</h3>
+        <p>Cada fonte exigiu um caminho próprio: o Archive.org cataloga invertido (<i>"Douglas, John E"</i>), e MangaDex e OpenAlex não aceitam nome em texto livre — é preciso resolver o autor antes.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="m15 9-4.5 1.5L9 15l4.5-1.5z"/></svg>
+        <h3>Onde encontrar, quando ninguém tem</h3>
+        <p>Acervo aberto não distribui obra sob direitos autorais. Em vez de lista vazia, o app aponta empréstimo digital, leitura online, bibliotecas físicas próximas e sebos.</p>
       </div>
 
       <div class="card" data-reveal>
@@ -607,9 +619,9 @@ footer{border-top:1px solid var(--line);padding:40px 0 52px;}
       <table>
         <thead><tr><th>Tipo</th><th>Fonte</th><th>Formato de saída</th></tr></thead>
         <tbody>
-          <tr><td>Mangá · Manhwa · HQ</td><td>MangaDex (API oficial)</td><td class="mono">CBZ + ComicInfo.xml</td></tr>
-          <tr><td>Livro</td><td>Archive.org · Project Gutenberg</td><td class="mono">PDF / EPUB / DJVU</td></tr>
-          <tr><td>Artigo</td><td>Archive.org</td><td class="mono">PDF</td></tr>
+          <tr><td>Mangá · Manhwa · HQ</td><td>MangaDex · Archive.org</td><td class="mono">CBZ + ComicInfo.xml</td></tr>
+          <tr><td>Livro</td><td>Open Library · Wikisource · Archive.org · Project Gutenberg · OAPEN · Zenodo</td><td class="mono">PDF / EPUB / DJVU</td></tr>
+          <tr><td>Artigo</td><td>OpenAlex · arXiv · Archive.org · OAPEN · Zenodo</td><td class="mono">PDF</td></tr>
         </tbody>
       </table>
     </div>
@@ -632,7 +644,7 @@ footer{border-top:1px solid var(--line);padding:40px 0 52px;}
         <li><b>app/bot_service.py</b><span>Worker serial: todas as operações do bot em uma única thread.</span></li>
         <li><b>media_bot.py</b><span>Orquestra scrapers, download, retry, fallback e biblioteca.</span></li>
         <li><b>download_queue.py</b><span>Fila persistente em SQLite, com estado por item.</span></li>
-        <li><b>scrapers/</b><span>MangaDex, Archive.org e Gutenberg sob um contrato comum.</span></li>
+        <li><b>scrapers/</b><span>9 fontes — de MangaDex a arXiv — sob um contrato comum.</span></li>
         <li><b>output_writer.py</b><span>Escreve o CBZ e injeta o ComicInfo.xml.</span></li>
         <li><b>komga_exporter.py</b><span>Monta a árvore de pastas que os servidores leem.</span></li>
       </ul>
