@@ -51,3 +51,19 @@ def test_no_slate_blue_leftovers_outside_root():
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
     for antiga in ["#2c3d61", "#2b3a52", "#24334f", "#30456a", "#212c3d"]:
         assert antiga not in css, f"cor da paleta antiga ainda presente: {antiga}"
+
+
+def test_body_uses_inter_and_headings_use_serif():
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    corpo = css.split("body {")[1].split("}")[0]
+    assert "'Inter'" in corpo
+    assert "Segoe UI" in corpo, "manter como fallback"
+    h1 = css.split("h1 {")[1].split("}")[0]
+    assert "'Instrument Serif'" in h1
+
+
+def test_signature_keeps_the_editorial_italic():
+    """'By Munhoz' é assinatura: serifa itálica creme, como na landing."""
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    assinatura = css.split(".signature b")[1].split("}")[0]
+    assert "var(--cream)" in assinatura
