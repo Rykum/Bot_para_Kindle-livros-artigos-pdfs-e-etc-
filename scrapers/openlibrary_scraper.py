@@ -149,6 +149,55 @@ class OpenLibraryScraper(BaseScraper):
         folded = unicodedata.normalize('NFKD', str(text).lower())
         return ''.join(c for c in folded if not unicodedata.combining(c))
 
+    #: Formas em que o Archive.org grava português no campo `language`.
+    IDIOMAS_PT = frozenset({"por", "portuguese", "pt", "pt-br", "português"})
+
+    def _idiomas_dos_exemplares(self, identificadores):
+        """
+        Idioma real de cada exemplar, numa **única** consulta em lote.
+
+        O campo `language` do Open Library não serve: ele lista *todos* os
+        idiomas em que a obra existe — `Misery` traz 15 — e não o idioma do
+        arquivo que se vai baixar. Medido: o exemplar que o app escolhia para
+        `Misery` estava em chinês, o de `It` em alemão, o de `Pet Sematary` em
+        russo. O idioma de verdade mora no item do Archive.org.
+        """
+        if not identificadores:
+            return {}
+        idiomas = {}
+        # O Advanced Search aceita uma disjunção de identificadores, então todos
+        # os exemplares de uma página saem numa chamada só.
+        for inicio in range(0, len(identificadores), 50):
+            lote = identificadores[inicio:inicio + 50]
+            consulta = " OR ".join(f"identifier:{i}" for i in lote)
+            resposta = self._archive.make_request(
+                self._archive.search_api,
+                params={"q": consulta, "fl[]": ["identifier", "language"],
+                        "rows": len(lote), "output": "json"})
+            if not resposta:
+                continue
+            for doc in resposta.json().get("response", {}).get("docs", []):
+                bruto = doc.get("language")
+                if isinstance(bruto, list):
+                    bruto = bruto[0] if bruto else None
+                if bruto:
+                    idiomas[doc["identifier"]] = str(bruto).lower()
+        return idiomas
+
+    def _melhor_exemplar(self, copias):
+        """
+        Escolhe o exemplar a baixar, preferindo português.
+
+        Devolve (identificador, idioma). Sem informação de idioma, mantém o
+        primeiro — o comportamento anterior — e reporta 'desconhecido' em vez
+        de inventar.
+        """
+        idiomas = getattr(self, "_idiomas_cache", {})
+        for identificador in copias:
+            if idiomas.get(identificador) in self.IDIOMAS_PT:
+                return identificador, "por"
+        return copias[0], idiomas.get(copias[0], "desconhecido")
+
     def explorar(self, genero, subgenero=None, ordenacao="relevancia"):
         """
         Lista obras de um gênero.
@@ -186,23 +235,31 @@ class OpenLibraryScraper(BaseScraper):
             resposta = self.make_request(self.search_api, params=params)
             if not resposta:
                 return resultados
-            for doc in resposta.json().get("docs", []):
+
+            documentos = [d for d in resposta.json().get("docs", []) if d.get("ia")]
+
+            # Uma chamada em lote resolve o idioma de todos os exemplares da
+            # página. Limitamos a 8 exemplares por obra: passar disso engorda a
+            # consulta sem melhorar a chance de achar português.
+            candidatos = [i for d in documentos for i in (d.get("ia") or [])[:8]]
+            self._idiomas_cache = self._idiomas_dos_exemplares(candidatos)
+
+            for doc in documentos:
                 copias = doc.get("ia") or []
-                if not copias:
-                    continue
                 autores = doc.get("author_name") or []
                 isbns = doc.get("isbn") or []
                 titulo = doc.get("title") or "Sem título"
                 capa = doc.get("cover_i")
+                escolhido, idioma = self._melhor_exemplar(copias)
                 resultados.append(ScrapedResult(
                     title=titulo,
-                    url=f"https://archive.org/details/{copias[0]}",
+                    url=f"https://archive.org/details/{escolhido}",
                     source=self.name,
                     format_type="pdf",
                     series_name=titulo,
-                    language=(doc.get("language") or [None])[0] or "desconhecido",
+                    language=idioma,
                     metadata={
-                        "identifier": copias[0],
+                        "identifier": escolhido,
                         "creator": ", ".join(autores),
                         "year": doc.get("first_publish_year"),
                         "isbn": isbns[0] if isbns else None,
@@ -210,8 +267,14 @@ class OpenLibraryScraper(BaseScraper):
                         "cover_url": (f"https://covers.openlibrary.org/b/id/{capa}-M.jpg"
                                       if capa else None),
                         "genero": genero.nome,
+                        "idioma": idioma,
                     },
                 ))
+
+            # Português primeiro. É raro — medido, ~1 obra em 12 de terror tem
+            # exemplar em português —, então ordenar não esvazia a tela, ao
+            # contrário de filtrar (0,3% a 2,7% do acervo sobrevive ao filtro).
+            resultados.sort(key=lambda r: 0 if r.language in self.IDIOMAS_PT else 1)
         except Exception as e:
             logger.error(f"Erro ao explorar no Open Library: {e}")
         return resultados
