@@ -376,6 +376,9 @@ def test_filters_by_tag_uuid_and_orders_by_followers(monkeypatch):
 
 
 def test_subgenre_adds_a_second_tag(monkeypatch):
+    # "Fantasmas" é o rótulo em português; o MangaDex só conhece "Ghosts".
+    # A tradução vive em SUBGENERO_TAG_MANGADEX, em scrapers/generos.py,
+    # ao lado da taxonomia — e há teste de sincronia lá.
     sc, cap = _scraper(monkeypatch)
     sc.explorar(genero_por_nome("manga", "Terror"), subgenero="Fantasmas")
     assert set(cap["includedTags[]"]) == {"uuid-horror", "uuid-ghosts"}
@@ -582,6 +585,24 @@ def test_subgenre_narrows_the_subject(monkeypatch):
     assert "distopia" not in cap["subject"].lower(), "subgênero precisa ir em inglês"
 
 
+def test_every_book_subgenre_resolves():
+    """Varre TODOS os subgêneros declarados, não só um caso fácil.
+
+    A primeira versão deste plano testava só "Distopia" — que por acaso não tem
+    acento — enquanto metade das chaves do dicionário eram acentuadas e portanto
+    inalcançáveis pelo lookup, que passa por `_fold()`.
+    """
+    from scrapers.generos import generos_de
+    sc = OpenLibraryScraper()
+    nao_resolvem = [
+        (g.nome, s)
+        for g in generos_de("livro")
+        for s in g.subgeneros
+        if sc.SUBGENEROS.get(sc._fold(s)) is None
+    ]
+    assert not nao_resolvem, f"subgêneros de livro sem tradução: {nao_resolvem}"
+
+
 def test_cover_url_comes_from_cover_i(monkeypatch):
     sc, _ = _ol(monkeypatch)
     r = sc.explorar(genero_por_nome("livro", "Terror"))[0]
@@ -610,16 +631,19 @@ Acrescentar um mapa de subgênero e o método, em `scrapers/openlibrary_scraper.
 
 ```python
     #: Subgênero em português -> termo de assunto em inglês.
+    #: As chaves são SEM ACENTO de propósito: o lookup passa por `_fold()`, que
+    #: remove diacríticos. Chave acentuada aqui é inalcançável — o subgênero
+    #: seria ignorado em silêncio, e o usuário veria o gênero inteiro sem aviso.
     SUBGENEROS = {
         "distopia": "dystopias", "space opera": "space opera", "cyberpunk": "cyberpunk",
-        "gótico": "gothic fiction", "sobrenatural": "supernatural",
-        "histórico": "historical fiction", "contemporâneo": "contemporary fiction",
+        "gotico": "gothic fiction", "sobrenatural": "supernatural",
+        "historico": "historical fiction", "contemporaneo": "contemporary fiction",
         "policial": "detective and mystery stories", "suspense": "suspense",
-        "épica": "epic", "contos de fadas": "fairy tales", "lírica": "lyric poetry",
-        "ética": "ethics", "metafísica": "metaphysics",
+        "epica": "epic", "contos de fadas": "fairy tales", "lirica": "lyric poetry",
+        "etica": "ethics", "metafisica": "metaphysics",
         "brasil": "brazil", "antiguidade": "antiquities",
-        "memórias": "autobiography", "viagem": "voyages and travels",
-        "náutica": "seafaring life",
+        "memorias": "autobiography", "viagem": "voyages and travels",
+        "nautica": "seafaring life",
     }
 
     def explorar(self, genero, subgenero=None, ordenacao="relevancia"):
@@ -1489,6 +1513,32 @@ git commit -m "docs: documenta a exploração por gênero"
 ---
 
 ## Notas para quem executar
+
+**Lição da execução: teste que só cobre o caso fácil não cobre nada.** O mesmo
+defeito apareceu duas vezes, em tarefas diferentes — subgênero que não resolve e
+é ignorado em silêncio — e nas duas o teste do plano exercitava exatamente o
+único valor que funcionava (`"Fantasmas"` na Task 3, `"Distopia"` na Task 4).
+Quando houver um mapa de rótulo para termo de API, **varra o mapa inteiro**: o
+teste tem que iterar sobre a taxonomia declarada, não sobre um exemplo escolhido
+à mão.
+
+**Lição da execução: refatoração que "não quebrou nenhum teste" pode ter
+quebrado produção.** Extrair `_resultados_de()` do `search()` do Gutendex fez
+ele parar de respeitar a ordem de `formats` e de extrair volume/capítulo — e a
+suíte passou verde, porque os testes daquele caminho eram fracos. Antes de
+extrair código compartilhado, verifique se os testes existentes de fato travam o
+comportamento que você está prestes a mover.
+
+**Lição da execução: os rótulos são em português, as APIs falam inglês.** A
+primeira versão deste plano prescrevia, na mesma Task 3, um teste passando
+`subgenero="Fantasmas"` e uma implementação que só resolvia nomes de tag em
+inglês — o código não fazia passar o próprio teste. A tradução
+(`SUBGENERO_TAG_MANGADEX`) mora em `scrapers/generos.py`, junto da taxonomia que
+ela descreve, com teste travando que todo subgênero listado tenha tag. Sem esse
+teste, um subgênero sem tag cai em silêncio para filtro só de gênero: o usuário
+clica em "Detetive", vê "Mistério" inteiro, e nada avisa que o refinamento não
+aconteceu. O mesmo vale para qualquer par rótulo-em-português / termo-de-API que
+aparecer daqui pra frente.
 
 **A Task 5 tem uma medição antes do código, e ela não é opcional.** A grade de HQ nasce do que passar no Step 1. Se só `superhero` sobreviver, a grade tem um item. Isso é o resultado correto: a spec (§5.3) decidiu que seis gêneros que funcionam valem mais que vinte que enganam.
 

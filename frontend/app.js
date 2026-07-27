@@ -44,6 +44,7 @@ document.querySelectorAll(".nav-item").forEach((btn) => {
     if (btn.dataset.view === "dashboard") loadDashboard();
     if (btn.dataset.view === "downloads") loadQueue();
     if (btn.dataset.view === "tools") loadDownloadDir();
+    if (btn.dataset.view === "explorar") montarGrade();
   });
 });
 
@@ -453,6 +454,90 @@ function restorePrefs() {
 ["lang-primary", "lang-fallback", "media-type", "search-lang", "search-by"].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("change", persistPrefs);
+});
+
+// --- explorar por gênero ---
+let generoAtual = null;
+
+function midiaExplorar() { return document.getElementById("explorar-midia").value; }
+
+async function montarGrade() {
+  const midia = midiaExplorar();
+  const generos = await api().generos(midia);
+  const grade = document.getElementById("genero-grid");
+  grade.innerHTML = "";
+  generoAtual = null;
+  document.getElementById("subgenero-row").innerHTML = "";
+
+  // #4 Consistência: só livro tem escolha real de ordenação.
+  document.getElementById("explorar-ordenacao").style.display =
+    midia === "livro" ? "" : "none";
+  document.getElementById("explorar-aviso").style.display =
+    midia === "hq" ? "" : "none";
+
+  generos.forEach((g) => {
+    const b = document.createElement("button");
+    b.className = "range-chip";
+    b.textContent = g.nome;
+    b.addEventListener("click", () => escolherGenero(g, b));
+    grade.appendChild(b);
+  });
+}
+
+function escolherGenero(g, botao) {
+  generoAtual = g;
+  document.querySelectorAll("#genero-grid .range-chip")
+    .forEach((x) => x.classList.remove("on"));
+  botao.classList.add("on");
+
+  const linha = document.getElementById("subgenero-row");
+  linha.innerHTML = "";
+  g.subgeneros.forEach((s) => {
+    const b = document.createElement("button");
+    b.className = "range-chip";
+    b.textContent = s;
+    b.addEventListener("click", () => explorar(s));
+    linha.appendChild(b);
+  });
+  explorar(null);
+}
+
+async function explorar(subgenero) {
+  if (!generoAtual) return;
+  document.getElementById("explorar-results").innerHTML =
+    '<p class="muted">Carregando…</p>';
+  await api().explorar(midiaExplorar(), generoAtual.nome, subgenero,
+                       document.getElementById("explorar-ordenacao").value);
+}
+
+document.getElementById("explorar-midia").addEventListener("change", montarGrade);
+document.getElementById("explorar-ordenacao").addEventListener("change", () => explorar(null));
+
+on("explorar_results", (p) => {
+  const box = document.getElementById("explorar-results");
+  if (!p.results.length) {
+    if (p.onde_encontrar && p.onde_encontrar.length) renderOndeEncontrar(box, p.onde_encontrar);
+    else box.innerHTML = '<p class="muted">Nada encontrado nesse gênero.</p>';
+    return;
+  }
+  box.innerHTML = "";
+  p.results.forEach((r) => {
+    const div = document.createElement("div");
+    div.className = "card";
+    const capa = (r.metadata && r.metadata.cover_url) || "";
+    // Capa pode voltar 502 (visto no Open Library): esconder sem quebrar a grade.
+    const img = capa
+      ? `<img class="cover" src="${capa}" alt="" loading="lazy"
+             onerror="this.style.display='none'" />`
+      : `<div class="cover"></div>`;
+    div.innerHTML = `${img}
+      <h3>${r.title || "Sem título"}</h3>
+      <div class="muted">${(r.metadata && r.metadata.creator) || ""}</div>
+      <button class="btn success" style="width:100%;margin-top:10px">Baixar →</button>`;
+    div.querySelector("button").addEventListener("click",
+      () => openChapters(r.title, r.source, midiaExplorar()));
+    box.appendChild(div);
+  });
 });
 
 // --- init ---

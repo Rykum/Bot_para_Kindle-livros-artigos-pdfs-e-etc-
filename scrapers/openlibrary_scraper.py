@@ -12,6 +12,7 @@ Frank Herbert, com o identificador do exemplar para baixar.
 """
 
 import logging
+import unicodedata
 from typing import List, Dict, Optional
 from .base_scraper import BaseScraper, ScrapedResult, SourceCapabilities, BOOK_MEDIA
 from .archive_scraper import ArchiveOrgScraper
@@ -25,13 +26,29 @@ class OpenLibraryScraper(BaseScraper):
     no Archive.org, já pronto para download.
     """
 
-    capabilities = SourceCapabilities(media_types=BOOK_MEDIA)
+    capabilities = SourceCapabilities(media_types=BOOK_MEDIA, explora_genero=True)
 
     #: Campos pedidos à API (menos tráfego e resposta mais rápida).
     FIELDS = 'key,title,author_name,first_publish_year,ia,isbn,language,edition_count'
 
     #: O Open Library usa ISO 639-2 (3 letras), não os códigos curtos do app.
     LANGUAGE_CODES = {'pt': 'por', 'pt-br': 'por', 'en': 'eng', 'es': 'spa'}
+
+    #: Subgênero em português -> termo de assunto em inglês. As chaves ficam
+    #: já dobradas (minúsculas, sem acento) porque o lookup em `explorar` usa
+    #: `self._fold(subgenero)` — uma chave acentuada aqui nunca seria
+    #: encontrada e o subgênero cairia em silêncio para o gênero inteiro.
+    SUBGENEROS = {
+        "distopia": "dystopias", "space opera": "space opera", "cyberpunk": "cyberpunk",
+        "gotico": "gothic fiction", "sobrenatural": "supernatural",
+        "historico": "historical fiction", "contemporaneo": "contemporary fiction",
+        "policial": "detective and mystery stories", "suspense": "suspense",
+        "epica": "epic", "contos de fadas": "fairy tales", "lirica": "lyric poetry",
+        "etica": "ethics", "metafisica": "metaphysics",
+        "brasil": "brazil", "antiguidade": "antiquities",
+        "memorias": "autobiography", "viagem": "voyages and travels",
+        "nautica": "seafaring life",
+    }
 
     def __init__(self):
         super().__init__(
@@ -123,3 +140,78 @@ class OpenLibraryScraper(BaseScraper):
     def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """Os exemplares são itens do Archive.org — delega para lá."""
         return self._archive.get_series_info(series_url, language=language)
+
+    @staticmethod
+    def _fold(text) -> str:
+        """Minúsculas sem acento, para casar 'Distopia' com a chave em SUBGENEROS."""
+        if isinstance(text, list):
+            text = ' '.join(str(t) for t in text)
+        folded = unicodedata.normalize('NFKD', str(text).lower())
+        return ''.join(c for c in folded if not unicodedata.combining(c))
+
+    def explorar(self, genero, subgenero=None, ordenacao="relevancia"):
+        """
+        Lista obras de um gênero.
+
+        A ordenação padrão é relevância — ausência de `sort`. Medido: ordenar por
+        popularidade traz o livro mais reimpresso do acervo inteiro para dentro de
+        qualquer gênero, e `Alice no País das Maravilhas` aparecia tanto em ficção
+        científica quanto em filosofia.
+        """
+        if genero is None or not genero.openlibrary:
+            return []
+
+        assunto = genero.openlibrary
+        if subgenero:
+            traduzido = self.SUBGENEROS.get(self._fold(subgenero))
+            if traduzido:
+                assunto = f"{assunto} {traduzido}"
+            else:
+                logger.warning(
+                    f"Open Library: subgênero '{subgenero}' sem tradução "
+                    f"conhecida; resultado cai para o gênero '{genero.nome}' "
+                    f"inteiro, sem esse refinamento")
+
+        params = {
+            "subject": assunto,
+            "fields": self.FIELDS + ",cover_i",
+            "limit": self.rows,
+            "has_fulltext": "true",     # só o que dá para baixar
+        }
+        if ordenacao == "mais_lidos":
+            params["sort"] = "readinglog"
+
+        resultados = []
+        try:
+            resposta = self.make_request(self.search_api, params=params)
+            if not resposta:
+                return resultados
+            for doc in resposta.json().get("docs", []):
+                copias = doc.get("ia") or []
+                if not copias:
+                    continue
+                autores = doc.get("author_name") or []
+                isbns = doc.get("isbn") or []
+                titulo = doc.get("title") or "Sem título"
+                capa = doc.get("cover_i")
+                resultados.append(ScrapedResult(
+                    title=titulo,
+                    url=f"https://archive.org/details/{copias[0]}",
+                    source=self.name,
+                    format_type="pdf",
+                    series_name=titulo,
+                    language=(doc.get("language") or [None])[0] or "desconhecido",
+                    metadata={
+                        "identifier": copias[0],
+                        "creator": ", ".join(autores),
+                        "year": doc.get("first_publish_year"),
+                        "isbn": isbns[0] if isbns else None,
+                        "openlibrary_key": doc.get("key"),
+                        "cover_url": (f"https://covers.openlibrary.org/b/id/{capa}-M.jpg"
+                                      if capa else None),
+                        "genero": genero.nome,
+                    },
+                ))
+        except Exception as e:
+            logger.error(f"Erro ao explorar no Open Library: {e}")
+        return resultados

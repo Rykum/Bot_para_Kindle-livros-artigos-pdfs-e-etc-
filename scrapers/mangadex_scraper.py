@@ -10,6 +10,7 @@ import logging
 import requests
 from typing import List, Dict, Optional
 from .base_scraper import BaseScraper, ScrapedResult, SourceCapabilities, SERIAL_MEDIA
+from .generos import SUBGENERO_TAG_MANGADEX
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,13 @@ class MangaDexScraper(BaseScraper):
         self.session.headers.update({
             'Accept': 'application/json',
         })
+        self._tabela_tags = None    # cache: nome em inglês -> UUID
     
     capabilities = SourceCapabilities(
         media_types=SERIAL_MEDIA,
         # A API não tem busca livre de texto: 'tudo' cai em busca por título.
         search_modes=frozenset({'titulo', 'autor', 'tudo'}),
+        explora_genero=True,
     )
 
     def _author_ids(self, name: str, limit: int = 5) -> List[str]:
@@ -50,6 +53,107 @@ class MangaDexScraper(BaseScraper):
         if not response:
             return []
         return [a.get('id') for a in response.json().get('data', []) if a.get('id')]
+
+    def _tag_ids(self, nomes):
+        """
+        Resolve nomes de tag para UUID.
+
+        A API do MangaDex só aceita UUID em `includedTags[]`. Gravar os UUIDs no
+        código os transformaria em bomba-relógio: se o MangaDex trocar um, o
+        gênero para de funcionar em silêncio. Resolver por nome custa uma chamada
+        (as 77 tags mudam raramente) e falha visível.
+        """
+        if self._tabela_tags is None:
+            resposta = self.make_request(f"{self.base_url}/manga/tag")
+            if not resposta:
+                return {}
+            self._tabela_tags = {
+                t["attributes"]["name"]["en"]: t["id"]
+                for t in resposta.json().get("data", [])
+                if t.get("id") and t.get("attributes", {}).get("name", {}).get("en")
+            }
+        return {n: self._tabela_tags[n] for n in nomes if n in self._tabela_tags}
+
+    @staticmethod
+    def _cover_url(manga_id, relationships):
+        """Monta a URL da capa a partir do relacionamento cover_art."""
+        for rel in relationships or []:
+            if rel.get("type") == "cover_art":
+                arquivo = (rel.get("attributes") or {}).get("fileName")
+                if arquivo:
+                    return f"https://uploads.mangadex.org/covers/{manga_id}/{arquivo}.256.jpg"
+        return None
+
+    def explorar(self, genero, subgenero=None, ordenacao="popular", idioma_origem="ja"):
+        """
+        Lista obras de um gênero, sem termo de busca.
+
+        A popularidade do MangaDex é medida por obra (seguidores daquele mangá),
+        então ela é ao mesmo tempo viva e precisa — diferente de livro, onde a
+        popularidade é global e vaza entre gêneros.
+        """
+        if genero is None or not genero.mangadex_tag:
+            return []
+
+        subgenero_tag = SUBGENERO_TAG_MANGADEX.get(subgenero, subgenero) if subgenero else None
+
+        desejadas = [genero.mangadex_tag]
+        if subgenero_tag:
+            desejadas.append(subgenero_tag)
+        ids = self._tag_ids([n for n in desejadas if n])
+
+        tag_principal = ids.get(genero.mangadex_tag)
+        if not tag_principal:
+            logger.warning(
+                f"MangaDex: tag '{genero.mangadex_tag}' não resolvida; "
+                f"gênero '{genero.nome}' indisponível")
+            return []
+
+        if subgenero_tag and subgenero_tag not in ids:
+            logger.warning(
+                f"MangaDex: subgênero '{subgenero}' sem tag correspondente "
+                f"(esperava '{subgenero_tag}'); resultado cai para o gênero "
+                f"'{genero.nome}' inteiro, sem esse refinamento")
+
+        params = {
+            "includedTags[]": [i for i in ids.values()],
+            "originalLanguage[]": [idioma_origem],
+            "order[followedCount]": "desc",
+            "includes[]": ["cover_art"],
+            "limit": 40,
+        }
+
+        resultados = []
+        try:
+            resposta = self.make_request(f"{self.base_url}/manga", params=params)
+            if not resposta:
+                return resultados
+            for manga in resposta.json().get("data", []):
+                atributos = manga.get("attributes", {})
+                titulos = atributos.get("title", {})
+                titulo = (titulos.get("pt-br") or titulos.get("en")
+                          or (list(titulos.values())[0] if titulos else "Sem título"))
+                manga_id = manga.get("id")
+                resultados.append(ScrapedResult(
+                    title=titulo,
+                    url=f"https://mangadex.org/title/{manga_id}",
+                    source=self.name,
+                    format_type="cbz",
+                    series_name=titulo,
+                    language="pt-br",
+                    metadata={
+                        "manga_id": manga_id,
+                        "identifier": manga_id,
+                        "creator": "",
+                        "year": atributos.get("year"),
+                        "cover_url": self._cover_url(manga_id, manga.get("relationships")),
+                        "genero": genero.nome,
+                    },
+                ))
+            logger.info(f"MangaDex: {len(resultados)} obras em '{genero.nome}'")
+        except Exception as e:
+            logger.error(f"Erro ao explorar no MangaDex: {e}")
+        return resultados
 
     def search(self, query: str, formats: List[str] = None, language: str = None,
                search_by: str = "titulo") -> List[ScrapedResult]:

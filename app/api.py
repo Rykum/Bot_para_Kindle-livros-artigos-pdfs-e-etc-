@@ -82,6 +82,22 @@ class Api:
         job_holder["id"] = job_id
         return {"job_id": job_id}
 
+    def explorar(self, media_type: str = "manga", genero: str = "",
+                 subgenero: str = None, ordenacao: str = "relevancia") -> Dict[str, str]:
+        def fn(bot, emit):
+            resultados = bot.explorar_genero(media_type, genero, subgenero or None, ordenacao)
+            sugestoes = onde_encontrar(genero, idioma=None) if not resultados else []
+            emit("explorar_results", {"results": resultados, "genero": genero,
+                                      "onde_encontrar": sugestoes})
+            return {"count": len(resultados)}
+        return {"job_id": self._service.submit(f"Explorar: {genero}", fn)}
+
+    def generos(self, media_type: str = "manga"):
+        """Taxonomia para a interface montar a grade."""
+        from scrapers.generos import generos_de
+        return [{"nome": g.nome, "subgeneros": list(g.subgeneros)}
+                for g in generos_de(media_type)]
+
     def list_chapters(self, series: str, media_type: str = "manga", source: str = "mangadex",
                       language: str = "pt-br", fallback_language: Optional[str] = None) -> Dict[str, str]:
         def fn(bot, emit):

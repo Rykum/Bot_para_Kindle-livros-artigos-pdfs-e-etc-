@@ -28,7 +28,7 @@ class ProjectGutenbergScraper(BaseScraper):
         )
         self.search_url = "https://gutendex.com/books"
     
-    capabilities = SourceCapabilities(media_types=BOOK_MEDIA)
+    capabilities = SourceCapabilities(media_types=BOOK_MEDIA, explora_genero=True)
 
     @staticmethod
     def _matches_author(book: Dict, query: str) -> bool:
@@ -36,6 +36,48 @@ class ProjectGutenbergScraper(BaseScraper):
         names = ' '.join(a.get('name', '') for a in book.get('authors', [])).lower()
         terms = [t for t in query.lower().split() if len(t) > 2]
         return bool(terms) and all(t in names for t in terms)
+
+    @staticmethod
+    def _cover_url(formats):
+        """A capa vem no próprio dicionário de formatos, sob uma chave image/*."""
+        for mime, url in (formats or {}).items():
+            if mime.startswith('image/'):
+                return url
+        return None
+
+    def _resultados_de(self, params, rotulo_genero=None):
+        """Executa a consulta e monta os ScrapedResult. Usado por search e explorar."""
+        resultados = []
+        try:
+            resposta = self.make_request(self.search_url, params=params)
+            if not resposta:
+                return resultados
+            for livro in resposta.json().get('results', []):
+                formatos = livro.get('formats', {}) or {}
+                download = (formatos.get('application/epub+zip')
+                            or formatos.get('application/pdf'))
+                if not download:
+                    continue
+                autores = ', '.join(a.get('name', '') for a in livro.get('authors', []))
+                titulo = livro.get('title', 'Sem título')
+                resultados.append(ScrapedResult(
+                    title=titulo,
+                    url=f"{self.base_url}/ebooks/{livro.get('id')}",
+                    source=self.name,
+                    format_type='epub' if 'epub' in str(download) else 'pdf',
+                    series_name=titulo,
+                    language=(livro.get('languages') or ['desconhecido'])[0],
+                    download_url=download,
+                    metadata={
+                        'identifier': str(livro.get('id')),
+                        'creator': autores,
+                        'cover_url': self._cover_url(formatos),
+                        'genero': rotulo_genero,
+                    },
+                ))
+        except Exception as e:
+            logger.error(f"Erro no Project Gutenberg: {e}")
+        return resultados
 
     def search(self, query: str, formats: List[str] = None, language: str = None,
                search_by: str = "titulo") -> List[ScrapedResult]:
@@ -70,14 +112,14 @@ class ProjectGutenbergScraper(BaseScraper):
                 'languages': lang if lang in ('pt', 'en', 'es') else 'pt,en,es',
                 'sort_by': 'downloads',
             }
-            
+
             response = self.make_request(self.search_url, params=params)
             if not response:
                 return results
-            
+
             data = response.json()
             books = data.get('results', [])
-            
+
             for book in books:
                 # Em 'autor', descarta o que veio por casar só com o título.
                 if mode == 'autor' and not self._matches_author(book, query):
@@ -87,14 +129,14 @@ class ProjectGutenbergScraper(BaseScraper):
                 book_id = book.get('id')
                 authors = book.get('authors', [])
                 author_names = ', '.join([a.get('name', '') for a in authors])
-                
+
                 # URLs dos formatos disponíveis
                 formats_dict = book.get('formats', {})
-                
+
                 # Verificar formatos disponíveis
                 available_formats = []
                 download_url = None
-                
+
                 for fmt in formats:
                     if fmt == 'epub':
                         epub_url = formats_dict.get('application/epub+zip')
@@ -107,22 +149,22 @@ class ProjectGutenbergScraper(BaseScraper):
                             available_formats.append('pdf')
                             if not download_url:
                                 download_url = pdf_url
-                
+
                 if not download_url:
                     # Tentar outros formatos se nenhum dos desejados estiver disponível
                     for mime_type, url in formats_dict.items():
                         if 'text' in mime_type or 'ebook' in mime_type:
                             download_url = url
                             break
-                
+
                 if not download_url:
                     continue  # Pular se não houver formato baixável
-                
+
                 book_url = f"{self.base_url}/ebooks/{book_id}"
-                
+
                 # Extrair metadados de volume/capítulo (raro em Gutenberg, mas possível)
                 metadata_parsed = self.parse_volume_chapter(title)
-                
+
                 result = ScrapedResult(
                     title=title,
                     url=book_url,
@@ -144,14 +186,40 @@ class ProjectGutenbergScraper(BaseScraper):
                     }
                 )
                 results.append(result)
-            
+
             logger.info(f"Gutenberg: {len(results)} resultados para '{query}'")
-            
+
         except Exception as e:
             logger.error(f"Erro ao pesquisar no Project Gutenberg: {e}")
-        
+
         return results
-    
+
+    def explorar(self, genero, subgenero=None, ordenacao="popular"):
+        """
+        Lista livros de domínio público de um gênero.
+
+        A Gutendex só tem uma ordenação (`sort=popular`); não existe endpoint
+        de relevância nem "mais lidos agora" separado. `ordenacao` é aceito só
+        para manter a mesma assinatura das outras fontes — o valor é sempre
+        ignorado, e o default reflete isso em vez de prometer relevância.
+
+        `subgenero` também não é usado: a Gutendex não tem um vocabulário de
+        assunto fino o bastante para refinar por subgênero (só `topic`, que já
+        é o gênero inteiro). Quem quiser refinamento por subgênero usa a Open
+        Library, que resolve isso no fan-out de livro.
+        """
+        if genero is None or not genero.gutendex:
+            return []
+        if subgenero:
+            logger.warning(
+                f"Gutendex: subgênero '{subgenero}' não é suportado; "
+                f"resultado cai para o gênero '{genero.nome}' inteiro, "
+                f"sem esse refinamento")
+        return self._resultados_de({
+            "topic": genero.gutendex,
+            "sort": "popular",
+        }, rotulo_genero=genero.nome)
+
     def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas de um livro

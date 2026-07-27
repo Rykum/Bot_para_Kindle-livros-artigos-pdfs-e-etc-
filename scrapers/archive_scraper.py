@@ -35,7 +35,7 @@ class ArchiveOrgScraper(BaseScraper):
         #: Abaixo disso, vale o último recurso: termos soltos com AND.
         self.last_resort_threshold = 3
 
-    capabilities = SourceCapabilities(media_types=SERIAL_MEDIA | BOOK_MEDIA)
+    capabilities = SourceCapabilities(media_types=SERIAL_MEDIA | BOOK_MEDIA, explora_genero=True)
 
     #: Termos de idioma por código, usados no filtro `language:`.
     _LANG_TERMS = {
@@ -255,6 +255,57 @@ class ArchiveOrgScraper(BaseScraper):
         
         return results
     
+    def explorar(self, genero, subgenero=None, ordenacao="popular"):
+        """
+        Lista HQ de um gênero, dentro de collection:comics.
+
+        Aviso de projeto: o acervo de HQ é irregular e o assunto é inconsistente
+        — medido, `horror` em collection:comics devolve Berserk, que é mangá. Por
+        isso a grade de gêneros de HQ é pequena e cada item foi validado à mão.
+        """
+        if genero is None or not genero.archive:
+            return []
+
+        consulta = (f'collection:comics AND subject:("{genero.archive}") '
+                    f'AND mediatype:texts')
+        params = {
+            "q": consulta,
+            "fl[]": ["identifier", "title", "creator", "year", "language",
+                     "mediatype", "downloads"],
+            "sort[]": ["downloads desc"],   # sem termo de busca não há relevância
+            "rows": self.rows,
+            "output": "json",
+        }
+
+        resultados = []
+        try:
+            resposta = self.make_request(self.search_api, params=params)
+            if not resposta:
+                return resultados
+            for doc in resposta.json().get("response", {}).get("docs", []):
+                identificador = doc.get("identifier")
+                titulo = doc.get("title", "")
+                if isinstance(titulo, list):
+                    titulo = titulo[0] if titulo else "Sem título"
+                resultados.append(ScrapedResult(
+                    title=titulo,
+                    url=f"{self.base_url}/details/{identificador}",
+                    source=self.name,
+                    format_type=self._detect_archive_format(doc),
+                    series_name=titulo,
+                    language="desconhecido",
+                    metadata={
+                        "identifier": identificador,
+                        "creator": doc.get("creator", ""),
+                        "year": doc.get("year"),
+                        "cover_url": f"{self.base_url}/services/img/{identificador}",
+                        "genero": genero.nome,
+                    },
+                ))
+        except Exception as e:
+            logger.error(f"Erro ao explorar HQ no Archive.org: {e}")
+        return resultados
+
     def _detect_archive_format(self, doc: Dict) -> str:
         """Detecta formato do item no Archive.org"""
         mediatype = doc.get('mediatype', '').lower()

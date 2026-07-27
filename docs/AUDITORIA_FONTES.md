@@ -311,6 +311,7 @@ timeout expirar, não trabalhando.
 | 6 — Histórico e HQ (Gallica, Comic Book Plus, ManyBooks) | ⚠️ **descartada** — ver 11.1 |
 | 7 — Com chave (Google Books, CORE, Europeana, DPLA, BHL) | 🔑 **bloqueada no usuário** — encanamento pronto, ver 11.2 |
 | "Onde encontrar" (seção 6) | ✅ feita |
+| Explorar por gênero | ✅ feita — ver `docs/superpowers/specs/2026-07-26-busca-por-genero-design.md` |
 
 Fontes ativas: **MangaDex, Open Library, Wikisource, Archive.org, Gutenberg,
 OAPEN, Zenodo, OpenAlex, arXiv**.

@@ -1,0 +1,145 @@
+"""Taxonomia de gêneros por tipo de mídia.
+
+Curada de propósito: os nomes ficam em português, a hierarquia é estável e o
+módulo não faz rede — dá para testar sem API. Os UUIDs das tags do MangaDex
+NÃO ficam aqui; são resolvidos em execução (ver mangadex_scraper._tag_ids).
+
+O vocabulário de assunto das fontes de livro é inglês: medido, `science fiction`
+devolve 90.804 obras e `ficção científica` devolve 14.
+"""
+
+import unicodedata
+from dataclasses import dataclass, field
+from typing import Dict, Optional, Tuple
+
+
+@dataclass(frozen=True)
+class Genero:
+    nome: str
+    subgeneros: Tuple[str, ...] = ()
+    mangadex_tag: Optional[str] = None
+    openlibrary: Optional[str] = None
+    gutendex: Optional[str] = None
+    archive: Optional[str] = None
+
+
+_MANGA = (
+    Genero("Ação", ("Artes marciais", "Samurais", "Militar"), mangadex_tag="Action"),
+    Genero("Aventura", ("Sobrevivência", "Viagem no tempo"), mangadex_tag="Adventure"),
+    Genero("Comédia", ("Trabalho", "Fatia de vida"), mangadex_tag="Comedy"),
+    Genero("Drama", ("Tragédia", "Psicológico"), mangadex_tag="Drama"),
+    Genero("Fantasia", ("Isekai", "Magia", "Demônios"), mangadex_tag="Fantasy"),
+    Genero("Terror", ("Fantasmas", "Monstros", "Psicológico"), mangadex_tag="Horror"),
+    Genero("Mistério", ("Detetive", "Crime"), mangadex_tag="Mystery"),
+    Genero("Romance", ("Harém", "Escolar"), mangadex_tag="Romance"),
+    Genero("Ficção científica", ("Mechas", "Realidade virtual", "Aliens"), mangadex_tag="Sci-Fi"),
+    Genero("Esportes", ("Artes marciais",), mangadex_tag="Sports"),
+    Genero("Histórico", ("Samurais", "Militar"), mangadex_tag="Historical"),
+    Genero("Sobrenatural", ("Demônios", "Fantasmas", "Magia"), mangadex_tag="Supernatural"),
+)
+
+# Subgênero é exibido em português na UI, mas a API do MangaDex só conhece o
+# nome da tag em inglês. Medido contra GET https://api.mangadex.org/manga/tag
+# (77 tags reais, sem locale pt-br) — cada entrada abaixo tem correspondência
+# confirmada. Duas trocas em relação a uma primeira tentativa:
+#   - "Paródia" (Comédia) não tem tag equivalente ("Parody" não existe na API)
+#     e virou "Trabalho" -> tema real "Office Workers".
+#   - "Detetive" (Mistério) não tem tag "Detective"; mapeado para o tema real
+#     mais próximo, "Police" (histórias de investigação policial).
+#
+# Este módulo é sem rede de propósito (ver docstring do arquivo), então
+# tests/test_generos.py::test_every_manga_subgenre_has_a_translation_entry só
+# trava que toda chave de _MANGA tem entrada aqui — não que os VALORES
+# ("Office Workers", "Police", ...) ainda existem como tag na API real. Essa
+# verificação fica para os testes que batem na rede de verdade.
+SUBGENERO_TAG_MANGADEX = {
+    "Artes marciais": "Martial Arts",
+    "Samurais": "Samurai",
+    "Militar": "Military",
+    "Sobrevivência": "Survival",
+    "Viagem no tempo": "Time Travel",
+    "Trabalho": "Office Workers",
+    "Fatia de vida": "Slice of Life",
+    "Tragédia": "Tragedy",
+    "Psicológico": "Psychological",
+    "Isekai": "Isekai",
+    "Magia": "Magic",
+    "Demônios": "Demons",
+    "Fantasmas": "Ghosts",
+    "Monstros": "Monsters",
+    "Detetive": "Police",
+    "Crime": "Crime",
+    "Harém": "Harem",
+    "Escolar": "School Life",
+    "Mechas": "Mecha",
+    "Realidade virtual": "Virtual Reality",
+    "Aliens": "Aliens",
+}
+
+_LIVRO = (
+    Genero("Ficção científica", ("Distopia", "Space opera", "Cyberpunk"),
+           openlibrary="science fiction", gutendex="science fiction"),
+    Genero("Terror", ("Gótico", "Sobrenatural"),
+           openlibrary="horror", gutendex="horror"),
+    Genero("Romance", ("Histórico", "Contemporâneo"),
+           openlibrary="romance", gutendex="love stories"),
+    Genero("Mistério", ("Policial", "Suspense"),
+           openlibrary="detective and mystery stories", gutendex="detective"),
+    Genero("Fantasia", ("Épica", "Contos de fadas"),
+           openlibrary="fantasy", gutendex="fantasy"),
+    Genero("Poesia", ("Épica", "Lírica"),
+           openlibrary="poetry", gutendex="poetry"),
+    Genero("Filosofia", ("Ética", "Metafísica"),
+           openlibrary="philosophy", gutendex="philosophy"),
+    Genero("História", ("Brasil", "Antiguidade"),
+           openlibrary="history", gutendex="history"),
+    Genero("Biografia", ("Memórias",),
+           openlibrary="biography", gutendex="biography"),
+    Genero("Aventura", ("Viagem", "Náutica"),
+           openlibrary="adventure stories", gutendex="adventure"),
+)
+
+# Grade pequena de propósito. Medido em collection:comics (top 4 por downloads):
+#   superhero (265)      -> X-Men, Amazing Spider-Man, Starman, Malibu's Genesis. PASSOU.
+#   western (418)        -> Lone Ranger, Durango Kid, Lash LaRue, Rocky Lane. PASSOU.
+#   funny animal (11)    -> Cutey Bunny, Omaha the Cat Dancer, Aniverse 1, QUACK!. PASSOU
+#                          (acervo pequeno, mas os 4 primeiros são HQ de verdade).
+#   war (254)            -> manual de manutenção do M16A1 e artbook de anime no
+#                          top 4. REPROVADO.
+#   crime (351)          -> "Opium - Manhwa Traduzido" e "Lupin III" (mangá) no
+#                          top 4. REPROVADO.
+#   romance (3654)       -> Invincible [Compendiums] (super-herói, já coberto)
+#                          e mangás no top 4. REPROVADO.
+#   horror (921)         -> MANGA: Berserk em primeiro. REPROVADO.
+#   science fiction (660)-> Invincible [Compendiums] em primeiro. REPROVADO.
+# Acrescentar gênero aqui EXIGE medir antes — ver §5.3 da spec.
+_HQ = (
+    Genero("Super-heróis", (), archive="superhero"),
+    Genero("Faroeste", (), archive="western"),
+    Genero("Bichos", (), archive="funny animal"),
+)
+
+GENEROS_POR_MIDIA: Dict[str, Tuple[Genero, ...]] = {
+    "manga": _MANGA,
+    "manhwa": _MANGA,      # mesma taxonomia; muda só o idioma de origem
+    "livro": _LIVRO,
+    "hq": _HQ,
+}
+
+
+def _dobra(texto: str) -> str:
+    """Minúsculas sem acento, para casar 'FICCAO' com 'Ficção'."""
+    plano = unicodedata.normalize("NFKD", str(texto or "").lower())
+    return "".join(c for c in plano if not unicodedata.combining(c)).strip()
+
+
+def generos_de(media_type: str) -> Tuple[Genero, ...]:
+    return GENEROS_POR_MIDIA.get((media_type or "").strip().lower(), ())
+
+
+def genero_por_nome(media_type: str, nome: str) -> Optional[Genero]:
+    alvo = _dobra(nome)
+    for g in generos_de(media_type):
+        if _dobra(g.nome) == alvo:
+            return g
+    return None
