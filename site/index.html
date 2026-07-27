@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Media Bot PT-BR — sua biblioteca, baixada e organizada</title>
-<meta name="description" content="Aplicativo desktop em Python que busca por título ou por autor em 9 fontes abertas, baixa e organiza mangás, livros, HQs e artigos — fila persistente, metadados ComicInfo.xml e exportação pronta para Komga e Kavita." />
+<meta name="description" content="Aplicativo desktop em Python que busca por título, autor ou gênero em 9 fontes abertas, baixa e organiza mangás, livros, HQs e artigos — fila persistente, metadados ComicInfo.xml e exportação pronta para Komga e Kavita." />
 <meta name="author" content="Munhoz" />
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#08090c" />
@@ -538,6 +538,20 @@ footer{border-top:1px solid var(--line);padding:40px 0 52px;}
       </div>
 
       <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <h3>Explorar por gênero, sem digitar nada</h3>
+        <p>Tela de descoberta: escolhe um gênero, vê o que existe. <b>Mangá</b> e <b>manhwa</b> pela taxonomia oficial do MangaDex, com subgêneros e ordem por seguidores; <b>livro</b> por relevância do gênero, só o que dá para baixar.</p>
+        <p>Cada fonte precisou de uma ordenação diferente: no mangá a popularidade é medida por obra e acerta; no acervo de livros ela traz o mais reimpresso de todos para dentro de qualquer gênero — <i>Alice no País das Maravilhas</i> aparecia em ficção científica <i>e</i> em filosofia.</p>
+      </div>
+
+      <div class="card" data-reveal>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 8h14"/><path d="M7 21h10"/><path d="M9 3h6"/></svg>
+        <h3>Grade de HQ pequena de propósito</h3>
+        <p>O acervo de quadrinhos é irregular e o campo de assunto é inconsistente. Dos 8 gêneros candidatos medidos, <b>5 foram reprovados</b>: <code>horror</code> devolvia <i>Berserk</i>, que é mangá, e <code>war</code> devolvia um manual do fuzil M16A1.</p>
+        <p>Ficaram três que funcionam. Seis gêneros que enganam valem menos que três que entregam.</p>
+      </div>
+
+      <div class="card" data-reveal>
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         <h3>Seleção de capítulos honesta</h3>
         <p>Ao abrir uma série o app analisa a quantidade real: <i>Capítulos 1–200 · N disponíveis · X baixados · faltam Y</i>.</p>
@@ -645,6 +659,7 @@ footer{border-top:1px solid var(--line);padding:40px 0 52px;}
         <li><b>media_bot.py</b><span>Orquestra scrapers, download, retry, fallback e biblioteca.</span></li>
         <li><b>download_queue.py</b><span>Fila persistente em SQLite, com estado por item.</span></li>
         <li><b>scrapers/</b><span>9 fontes — de MangaDex a arXiv — sob um contrato comum.</span></li>
+        <li><b>scrapers/generos.py</b><span>Taxonomia de gêneros por tipo de mídia, sem rede — é o que a torna testável.</span></li>
         <li><b>output_writer.py</b><span>Escreve o CBZ e injeta o ComicInfo.xml.</span></li>
         <li><b>komga_exporter.py</b><span>Monta a árvore de pastas que os servidores leem.</span></li>
       </ul>
