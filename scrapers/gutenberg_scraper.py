@@ -31,11 +31,53 @@ class ProjectGutenbergScraper(BaseScraper):
     capabilities = SourceCapabilities(media_types=BOOK_MEDIA)
 
     @staticmethod
-    def _matches_author(book: Dict, query: str) -> bool:
-        """Confere se algum autor do livro bate com os termos buscados."""
-        names = ' '.join(a.get('name', '') for a in book.get('authors', [])).lower()
+    def _matches_author(result: ScrapedResult, query: str) -> bool:
+        """Confere se o autor do resultado bate com os termos buscados."""
+        names = (result.metadata.get('creator') or '').lower()
         terms = [t for t in query.lower().split() if len(t) > 2]
         return bool(terms) and all(t in names for t in terms)
+
+    @staticmethod
+    def _cover_url(formats):
+        """A capa vem no próprio dicionário de formatos, sob uma chave image/*."""
+        for mime, url in (formats or {}).items():
+            if mime.startswith('image/'):
+                return url
+        return None
+
+    def _resultados_de(self, params, rotulo_genero=None):
+        """Executa a consulta e monta os ScrapedResult. Usado por search e explorar."""
+        resultados = []
+        try:
+            resposta = self.make_request(self.search_url, params=params)
+            if not resposta:
+                return resultados
+            for livro in resposta.json().get('results', []):
+                formatos = livro.get('formats', {}) or {}
+                download = (formatos.get('application/epub+zip')
+                            or formatos.get('application/pdf'))
+                if not download:
+                    continue
+                autores = ', '.join(a.get('name', '') for a in livro.get('authors', []))
+                titulo = livro.get('title', 'Sem título')
+                resultados.append(ScrapedResult(
+                    title=titulo,
+                    url=f"{self.base_url}/ebooks/{livro.get('id')}",
+                    source=self.name,
+                    format_type='epub' if 'epub' in str(download) else 'pdf',
+                    series_name=titulo,
+                    language=(livro.get('languages') or ['desconhecido'])[0],
+                    download_url=download,
+                    metadata={
+                        'identifier': str(livro.get('id')),
+                        'creator': autores,
+                        'cover_url': self._cover_url(formatos),
+                        'genero': rotulo_genero,
+                    },
+                ))
+        except Exception as e:
+            logger.error(f"Erro no Project Gutenberg: {e}")
+        return resultados
 
     def search(self, query: str, formats: List[str] = None, language: str = None,
                search_by: str = "titulo") -> List[ScrapedResult]:
@@ -55,103 +97,35 @@ class ProjectGutenbergScraper(BaseScraper):
         Returns:
             Lista de ScrapedResult com livros encontrados
         """
-        if formats is None:
-            formats = ['epub', 'pdf']
-
-        results = []
         mode = self.normalize_search_by(search_by)
 
-        try:
-            # Gutendex API. Idioma escolhido pelo usuário (pt/en/es); sem
-            # escolha, busca amplo (pt,en,es) em vez de travar só em português.
-            lang = (language or '').lower().replace('pt-br', 'pt')
-            params = {
-                'search': query,
-                'languages': lang if lang in ('pt', 'en', 'es') else 'pt,en,es',
-                'sort_by': 'downloads',
-            }
-            
-            response = self.make_request(self.search_url, params=params)
-            if not response:
-                return results
-            
-            data = response.json()
-            books = data.get('results', [])
-            
-            for book in books:
-                # Em 'autor', descarta o que veio por casar só com o título.
-                if mode == 'autor' and not self._matches_author(book, query):
-                    continue
+        # Gutendex API. Idioma escolhido pelo usuário (pt/en/es); sem escolha,
+        # busca amplo (pt,en,es) em vez de travar só em português.
+        lang = (language or '').lower().replace('pt-br', 'pt')
+        params = {
+            'search': query,
+            'languages': lang if lang in ('pt', 'en', 'es') else 'pt,en,es',
+            'sort_by': 'downloads',
+        }
 
-                title = book.get('title', 'Sem título')
-                book_id = book.get('id')
-                authors = book.get('authors', [])
-                author_names = ', '.join([a.get('name', '') for a in authors])
-                
-                # URLs dos formatos disponíveis
-                formats_dict = book.get('formats', {})
-                
-                # Verificar formatos disponíveis
-                available_formats = []
-                download_url = None
-                
-                for fmt in formats:
-                    if fmt == 'epub':
-                        epub_url = formats_dict.get('application/epub+zip')
-                        if epub_url:
-                            available_formats.append('epub')
-                            download_url = epub_url
-                    elif fmt == 'pdf':
-                        pdf_url = formats_dict.get('application/pdf')
-                        if pdf_url:
-                            available_formats.append('pdf')
-                            if not download_url:
-                                download_url = pdf_url
-                
-                if not download_url:
-                    # Tentar outros formatos se nenhum dos desejados estiver disponível
-                    for mime_type, url in formats_dict.items():
-                        if 'text' in mime_type or 'ebook' in mime_type:
-                            download_url = url
-                            break
-                
-                if not download_url:
-                    continue  # Pular se não houver formato baixável
-                
-                book_url = f"{self.base_url}/ebooks/{book_id}"
-                
-                # Extrair metadados de volume/capítulo (raro em Gutenberg, mas possível)
-                metadata_parsed = self.parse_volume_chapter(title)
-                
-                result = ScrapedResult(
-                    title=title,
-                    url=book_url,
-                    source=self.name,
-                    format_type=available_formats[0] if available_formats else 'unknown',
-                    volume=metadata_parsed.get('volume'),
-                    chapter=metadata_parsed.get('chapter'),
-                    number=metadata_parsed.get('number'),
-                    series_name=query,
-                    language='pt-br',
-                    file_size=None,  # Gutenberg não fornece size diretamente
-                    download_url=download_url,
-                    metadata={
-                        'book_id': book_id,
-                        'authors': author_names,
-                        'subjects': book.get('subjects', []),
-                        'download_count': book.get('download_count', 0),
-                        'available_formats': available_formats,
-                    }
-                )
-                results.append(result)
-            
-            logger.info(f"Gutenberg: {len(results)} resultados para '{query}'")
-            
-        except Exception as e:
-            logger.error(f"Erro ao pesquisar no Project Gutenberg: {e}")
-        
+        results = self._resultados_de(params)
+
+        # Em 'autor', descarta o que veio por casar só com o título.
+        if mode == 'autor':
+            results = [r for r in results if self._matches_author(r, query)]
+
+        logger.info(f"Gutenberg: {len(results)} resultados para '{query}'")
         return results
-    
+
+    def explorar(self, genero, subgenero=None, ordenacao="relevancia"):
+        """Lista livros de domínio público de um gênero."""
+        if genero is None or not genero.gutendex:
+            return []
+        return self._resultados_de({
+            "topic": genero.gutendex,
+            "sort": "popular",
+        }, rotulo_genero=genero.nome)
+
     def get_series_info(self, series_url: str, language: str = "pt-br") -> Dict:
         """
         Obtém informações detalhadas de um livro
