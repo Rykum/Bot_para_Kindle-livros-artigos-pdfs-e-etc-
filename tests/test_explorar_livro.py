@@ -60,6 +60,29 @@ def test_cover_url_comes_from_cover_i(monkeypatch):
     assert r.metadata["cover_url"] == "https://covers.openlibrary.org/b/id/8259296-M.jpg"
 
 
+def test_every_book_subgenre_resolves():
+    """Subgênero que não resolve é ignorado em silêncio, e o usuário vê o
+    gênero inteiro sem nada avisar."""
+    from scrapers.generos import generos_de
+    sc = OpenLibraryScraper()
+    nao_resolvem = []
+    for g in generos_de("livro"):
+        for s in g.subgeneros:
+            if sc.SUBGENEROS.get(sc._fold(s)) is None:
+                nao_resolvem.append((g.nome, s))
+    assert not nao_resolvem, f"subgêneros de livro sem tradução: {nao_resolvem}"
+
+
+def test_unresolved_subgenre_warns(monkeypatch, caplog):
+    """Sem aviso, o filtro cai em silêncio para o gênero inteiro."""
+    import logging
+    sc, _ = _ol(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        sc.explorar(genero_por_nome("livro", "Terror"), subgenero="NaoExiste")
+    assert any("NaoExiste" in r.message for r in caplog.records), \
+        "subgênero não resolvido precisa avisar"
+
+
 def test_gutendex_uses_topic_and_popular(monkeypatch):
     sc = ProjectGutenbergScraper()
     cap = {}

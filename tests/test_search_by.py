@@ -280,6 +280,44 @@ def test_gutenberg_title_mode_keeps_everything(monkeypatch):
     assert len(sc.search("Machado", search_by="titulo")) == 2
 
 
+def test_gutenberg_search_only_uses_desired_formats(monkeypatch):
+    """search() precisa continuar respeitando o parâmetro `formats` de quem
+    chama — a API tem epub disponível mas só pdf foi pedido, então o pdf tem
+    que vencer. A extração de explorar() para _resultados_de() (que ignora
+    `formats` e sempre prefere epub) não pode vazar para search()."""
+    sc = ProjectGutenbergScraper()
+
+    def fake(url, params=None, retries=0):
+        return FakeResp({"results": [{
+            "id": 1, "title": "Dom Casmurro",
+            "authors": [{"name": "Machado de Assis"}],
+            "formats": {
+                "application/epub+zip": "https://x/1.epub",
+                "application/pdf": "https://x/1.pdf",
+            },
+        }]})
+
+    monkeypatch.setattr(sc, "make_request", fake)
+    res = sc.search("Dom Casmurro", formats=["pdf"], search_by="titulo")
+    assert res[0].format_type == "pdf"
+    assert res[0].download_url == "https://x/1.pdf"
+
+
+def test_gutenberg_search_extracts_volume_and_chapter_from_title(monkeypatch):
+    """search() precisa continuar preenchendo volume/capítulo quando o
+    título traz — comportamento que a extração para _resultados_de() (usado
+    só por explorar(), que não chama parse_volume_chapter) não pode apagar."""
+    sc = ProjectGutenbergScraper()
+
+    def fake(url, params=None, retries=0):
+        return FakeResp(_gutendex(("Coleção Vol. 2 Capítulo 5", ["Autor X"])))
+
+    monkeypatch.setattr(sc, "make_request", fake)
+    res = sc.search("Coleção", search_by="titulo")
+    assert res[0].volume == 2
+    assert res[0].chapter == 5
+
+
 # --------------------------- MangaDex ---------------------------
 
 def test_mangadex_author_mode_resolves_name_to_ids(monkeypatch):

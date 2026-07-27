@@ -34,17 +34,20 @@ class OpenLibraryScraper(BaseScraper):
     #: O Open Library usa ISO 639-2 (3 letras), não os códigos curtos do app.
     LANGUAGE_CODES = {'pt': 'por', 'pt-br': 'por', 'en': 'eng', 'es': 'spa'}
 
-    #: Subgênero em português -> termo de assunto em inglês.
+    #: Subgênero em português -> termo de assunto em inglês. As chaves ficam
+    #: já dobradas (minúsculas, sem acento) porque o lookup em `explorar` usa
+    #: `self._fold(subgenero)` — uma chave acentuada aqui nunca seria
+    #: encontrada e o subgênero cairia em silêncio para o gênero inteiro.
     SUBGENEROS = {
         "distopia": "dystopias", "space opera": "space opera", "cyberpunk": "cyberpunk",
-        "gótico": "gothic fiction", "sobrenatural": "supernatural",
-        "histórico": "historical fiction", "contemporâneo": "contemporary fiction",
+        "gotico": "gothic fiction", "sobrenatural": "supernatural",
+        "historico": "historical fiction", "contemporaneo": "contemporary fiction",
         "policial": "detective and mystery stories", "suspense": "suspense",
-        "épica": "epic", "contos de fadas": "fairy tales", "lírica": "lyric poetry",
-        "ética": "ethics", "metafísica": "metaphysics",
+        "epica": "epic", "contos de fadas": "fairy tales", "lirica": "lyric poetry",
+        "etica": "ethics", "metafisica": "metaphysics",
         "brasil": "brazil", "antiguidade": "antiquities",
-        "memórias": "autobiography", "viagem": "voyages and travels",
-        "náutica": "seafaring life",
+        "memorias": "autobiography", "viagem": "voyages and travels",
+        "nautica": "seafaring life",
     }
 
     def __init__(self):
@@ -163,6 +166,11 @@ class OpenLibraryScraper(BaseScraper):
             traduzido = self.SUBGENEROS.get(self._fold(subgenero))
             if traduzido:
                 assunto = f"{assunto} {traduzido}"
+            else:
+                logger.warning(
+                    f"Open Library: subgênero '{subgenero}' sem tradução "
+                    f"conhecida; resultado cai para o gênero '{genero.nome}' "
+                    f"inteiro, sem esse refinamento")
 
         params = {
             "subject": assunto,
