@@ -513,6 +513,30 @@ async function explorar(subgenero) {
 document.getElementById("explorar-midia").addEventListener("change", montarGrade);
 document.getElementById("explorar-ordenacao").addEventListener("change", () => explorar(null));
 
+// #2 Correspondência com o mundo real: o idioma exibido é o do ARQUIVO que será
+// baixado, não o da obra. Medido: o exemplar de "Misery" que o app escolhia
+// estava em chinês, o de "It" em alemão, o de "Pet Sematary" em russo — e nada
+// na tela dizia isso.
+const IDIOMAS = {
+  por: "Português", pt: "Português", "pt-br": "Português",
+  eng: "Inglês", en: "Inglês", spa: "Espanhol", es: "Espanhol",
+  fre: "Francês", fra: "Francês", ger: "Alemão", deu: "Alemão",
+  ita: "Italiano", dut: "Holandês", nld: "Holandês", rus: "Russo",
+  chi: "Chinês", zho: "Chinês", jpn: "Japonês", kor: "Coreano",
+  pol: "Polonês", tur: "Turco", ara: "Árabe", heb: "Hebraico",
+  swe: "Sueco", dan: "Dinamarquês", fin: "Finlandês", lat: "Latim",
+};
+function etiquetaIdioma(codigo) {
+  if (!codigo || codigo === "desconhecido") return "";
+  const chave = String(codigo).toLowerCase();
+  const nome = IDIOMAS[chave] || chave.toUpperCase();
+  const ehPt = ["por", "pt", "pt-br"].indexOf(chave) >= 0;
+  // Português ganha destaque; o resto fica discreto mas legível.
+  return `<div style="margin-top:8px"><span class="pill"${
+    ehPt ? ' style="border-color:var(--ok);color:var(--ok)"' : ""
+  }>${nome}</span></div>`;
+}
+
 on("explorar_results", (p) => {
   const box = document.getElementById("explorar-results");
   if (!p.results.length) {
@@ -533,6 +557,7 @@ on("explorar_results", (p) => {
     div.innerHTML = `${img}
       <h3>${r.title || "Sem título"}</h3>
       <div class="muted">${(r.metadata && r.metadata.creator) || ""}</div>
+      ${etiquetaIdioma(r.language)}
       <button class="btn success" style="width:100%;margin-top:10px">Baixar →</button>`;
     div.querySelector("button").addEventListener("click",
       () => openChapters(r.title, r.source, midiaExplorar()));

@@ -49,3 +49,19 @@ def test_ordering_selector_is_hidden_outside_books():
         "seletor de ordenação precisa ficar escondido fora de 'livro' "
         "(midia === \"livro\" ? \"\" : \"none\")"
     )
+
+
+def test_language_badge_is_rendered():
+    """Sem isso o usuário baixa Misery em chinês sem nenhum aviso na tela."""
+    js = (FRONT / "app.js").read_text(encoding="utf-8")
+    assert "etiquetaIdioma" in js, "card não mostra o idioma"
+    assert "r.language" in js, "a etiqueta não lê o idioma do resultado"
+
+
+def test_language_codes_are_translated_to_portuguese():
+    """Mostrar 'chi' não ajuda ninguém; tem que dizer 'Chinês'."""
+    js = (FRONT / "app.js").read_text(encoding="utf-8")
+    for codigo, nome in [("por", "Português"), ("chi", "Chinês"),
+                         ("ger", "Alemão"), ("rus", "Russo")]:
+        assert f'{codigo}: "{nome}"' in js or f"{codigo}: '{nome}'" in js, \
+            f"código {codigo} sem tradução"
