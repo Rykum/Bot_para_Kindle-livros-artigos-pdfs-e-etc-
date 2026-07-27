@@ -41,3 +41,20 @@ def test_failure_to_fetch_yields_empty_not_crash(monkeypatch):
     sc = MangaDexScraper()
     monkeypatch.setattr(sc, "make_request", lambda *a, **k: None)
     assert sc._tag_ids(["Horror"]) == {}
+
+
+def test_failure_does_not_poison_the_cache(monkeypatch):
+    """Uma queda de rede momentânea não pode deixar o app sem tags até reiniciar."""
+    sc = MangaDexScraper()
+    respostas = [None, FakeResp(_tags())]   # 1ª falha, 2ª funciona
+    chamadas = []
+
+    def fake(url, params=None, retries=0):
+        chamadas.append(url)
+        return respostas.pop(0)
+
+    monkeypatch.setattr(sc, "make_request", fake)
+
+    assert sc._tag_ids(["Horror"]) == {}          # falhou
+    assert sc._tag_ids(["Horror"]) == {"Horror": "uuid-horror"}   # tentou de novo
+    assert len(chamadas) == 2, "a falha não pode ter ficado guardada no cache"
