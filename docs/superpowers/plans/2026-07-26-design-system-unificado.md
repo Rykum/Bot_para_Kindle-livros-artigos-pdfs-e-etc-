@@ -354,13 +354,40 @@ git commit -m "feat(ui): Inter no corpo, Instrument Serif nos títulos e na assi
 
 - [ ] **Step 1: Write the failing test**
 
+> **Corrigido durante a execução.** O assert de `pointer-events` da primeira
+> versão casava com uma string **pré-existente** (`.search-bar .search-input::before`)
+> e passaria mesmo que a textura esquecesse `pointer-events:none` — o defeito
+> exato que ele deveria pegar. Os asserts abaixo olham dentro de cada regra, e
+> a paridade com a landing é comparada arquivo contra arquivo.
+
 ```python
 def test_background_has_grain_and_glow_like_the_landing():
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
     assert "feTurbulence" in css, "grão ausente"
     assert "radial-gradient" in css, "brilho radial ausente"
-    assert "pointer-events:none" in css.replace(" ", ""), \
-        "a textura não pode capturar clique"
+
+
+def test_texture_layers_never_capture_clicks():
+    """São position:fixed cobrindo a tela: sem isso, o app fica inerte."""
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    for camada in ["body::before", "body::after"]:
+        regra = _regra(css, camada)
+        assert "pointer-events:none" in regra.replace(" ", ""), \
+            f"{camada} captura clique"
+
+
+def test_background_texture_matches_the_landing_exactly():
+    """A textura do app tem que ser a mesma da landing, valor por valor."""
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    landing = (FRONT.parent / "site" / "index.html").read_text(encoding="utf-8")
+
+    def gradientes(texto):
+        bloco = re.search(r'body::before\s*\{([^}]*)\}', texto).group(1)
+        return sorted(re.findall(r'radial-gradient\(([^)]*)\)',
+                                 bloco.replace(" ", "")))
+
+    assert gradientes(css) == gradientes(landing), \
+        "os gradientes do app divergem dos da landing"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -372,17 +399,23 @@ Expected: FAIL — "grão ausente".
 
 Depois da regra `body` em `frontend/styles.css`:
 
+> **Corrigido durante a execução.** A primeira versão deste passo trazia valores
+> mais discretos que os da landing e **omitia o terceiro gradiente**. O dono do
+> projeto decidiu por paridade exata. Os valores abaixo são os de
+> `site/index.html` — na dúvida, copie de lá, não digite de memória.
+
 ```css
 /* textura: brilho radial baixo + grão fino, iguais à landing */
 body::before{
   content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
   background:
-    radial-gradient(820px 480px at 12% -6%, rgba(126,166,255,.09), transparent 62%),
-    radial-gradient(680px 420px at 94% 4%, rgba(232,213,176,.04), transparent 60%);
+    radial-gradient(880px 520px at 14% -8%, rgba(126,166,255,.10), transparent 62%),
+    radial-gradient(720px 460px at 92% 6%, rgba(232,213,176,.045), transparent 60%),
+    radial-gradient(1000px 700px at 50% 108%, rgba(126,166,255,.05), transparent 65%);
 }
 body::after{
   content:"";position:fixed;inset:-50%;z-index:0;pointer-events:none;
-  opacity:.03;mix-blend-mode:overlay;
+  opacity:.032;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 #app{position:relative;z-index:1;}
