@@ -34,16 +34,49 @@ def test_css_declares_both_families_locally():
     assert "https://" not in css.split("/* ---------------- Sidebar")[0]
 
 
+def _tokens_do_root(texto):
+    """Extrai o bloco :root{...} e devolve um dict {token: valor} normalizado.
+
+    Funciona tanto para o :root do app (frontend/styles.css) quanto para o
+    :root embutido no <style> da landing (site/index.html) — nenhum dos dois
+    tem chaves aninhadas dentro do bloco, então um [^}]* simples é seguro.
+    """
+    m = re.search(r':root\s*\{([^}]*)\}', texto)
+    assert m, "bloco :root não encontrado"
+    corpo = m.group(1)
+    tokens = {}
+    for nome, valor in re.findall(r'(--[\w-]+)\s*:\s*([^;]+);', corpo):
+        tokens[nome] = valor.replace(" ", "")
+    return tokens
+
+
 def test_tokens_match_the_landing_palette():
-    """A paleta do app tem que ser a mesma da landing, valor por valor."""
+    """A paleta do app tem que ser a mesma da landing, valor por valor.
+
+    Compara os dois :root direto dos arquivos (não literais cravados no
+    teste), para que uma mudança de cor na landing seja detectada aqui —
+    igual ao que já acontece com o teste de textura. Compara apenas a
+    interseção dos tokens: o app tem apelidos (--bg, --accent, ...) e
+    espaçamento (--s-1..--s-8) que a landing não tem; a landing tem --maxw
+    e --gut, que o app não tem.
+    """
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
-    for token, valor in [
-        ("--ink-950", "#08090c"), ("--ink-900", "#0b0d12"),
-        ("--ink-850", "#0e1117"), ("--ink-800", "#11151d"),
-        ("--tx", "#eceef3"), ("--tx-2", "#98a1b2"), ("--tx-3", "#616a7b"),
-        ("--blue", "#7ea6ff"), ("--cream", "#e8d5b0"),
-    ]:
-        assert f"{token}:{valor}" in css.replace(" ", ""), token
+    landing = (FRONT.parent / "site" / "index.html").read_text(encoding="utf-8")
+
+    app_tokens = _tokens_do_root(css)
+    landing_tokens = _tokens_do_root(landing)
+
+    interseccao = set(app_tokens) & set(landing_tokens)
+    assert len(interseccao) >= 15, \
+        f"interseção pequena demais ({len(interseccao)} tokens) — teste " \
+        f"comparando quase nada: {sorted(interseccao)}"
+
+    divergentes = {
+        token: (app_tokens[token], landing_tokens[token])
+        for token in sorted(interseccao)
+        if app_tokens[token] != landing_tokens[token]
+    }
+    assert not divergentes, f"tokens divergem do app para a landing: {divergentes}"
 
 
 def test_borders_are_alpha_hairlines_not_solid():
@@ -61,9 +94,19 @@ def test_old_token_names_still_resolve():
 
 
 def test_no_slate_blue_leftovers_outside_root():
-    """A paleta antiga era slate-blue; sobre o near-black ela destoa."""
+    """A paleta antiga era slate-blue; sobre o near-black ela destoa.
+
+    #8c99ac (--muted antigo) entra duas vezes na lista: a forma crua, para
+    o caso comum de aparecer solta no CSS, e a forma URL-encoded
+    ('%238c99ac'), porque a única ocorrência real dela hoje está dentro de
+    um data URI de SVG — onde o '#' vira '%23' e a checagem pela string
+    crua não pega nada.
+    """
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
-    for antiga in ["#2c3d61", "#2b3a52", "#24334f", "#30456a", "#212c3d"]:
+    for antiga in [
+        "#2c3d61", "#2b3a52", "#24334f", "#30456a", "#212c3d",
+        "#8c99ac", "%238c99ac",
+    ]:
         assert antiga not in css, f"cor da paleta antiga ainda presente: {antiga}"
 
 
@@ -111,7 +154,7 @@ def test_background_texture_matches_the_landing_exactly():
     def gradientes(texto):
         bloco = re.search(r'body::before\s*\{([^}]*)\}', texto).group(1)
         # Extrai todos os radial-gradient e normaliza
-        return sorted(re.findall(r'radial-gradient\([^)]*\)', bloco))
+        return sorted(re.findall(r'radial-gradient\((?:[^()]|\([^()]*\))*\)', bloco))
 
     app_grads = gradientes(css)
     landing_grads = gradientes(landing)
