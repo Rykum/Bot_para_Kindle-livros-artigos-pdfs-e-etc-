@@ -3,6 +3,19 @@
    Paleta slate/blue rica, painéis com respiro, hierarquia clara.
    ============================================================ */
 
+@font-face{
+  font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url(fonts/inter-var-latin.woff2) format('woff2');
+}
+@font-face{
+  font-family:'Instrument Serif'; font-style:normal; font-weight:400; font-display:swap;
+  src:url(fonts/instrumentserif-latin.woff2) format('woff2');
+}
+@font-face{
+  font-family:'Instrument Serif'; font-style:italic; font-weight:400; font-display:swap;
+  src:url(fonts/instrumentserif-italic-latin.woff2) format('woff2');
+}
+
 :root {
   /* superfícies — minimalista, plano */
   --bg: #0d1420;
