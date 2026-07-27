@@ -23,7 +23,7 @@ Medi o suporte a gênero em cada fonte, por HTTP real. As naturezas são opostas
 | **MangaDex** | **Fechado**: 25 gêneros + 38 temas, filtro por UUID | `followedCount` — vivo **e** preciso |
 | **Open Library** | Texto livre, em inglês | **relevância** (padrão) |
 | **Gutendex** | Texto livre, estilo biblioteca | `popular` |
-| **Archive.org** | Texto livre, inconsistente | ruim para gênero — **fora** |
+| **Archive.org** | Texto livre, inconsistente | ruim para livro — **só entra em HQ**, onde é a única opção (§5.3) |
 
 ### 2.1 Popularidade funciona em mangá e falha em livro
 
@@ -100,6 +100,10 @@ Um parâmetro os separa: `originalLanguage[]`.
 | manhwa | `ko` | 8.717 |
 | manhua | `zh` | 6.049 |
 
+**Sobre manhua:** o app hoje só tem `manga`, `livro`, `hq`, `manhwa` e `artigo`
+como tipos de mídia. Manhua **não vira tipo novo nesta spec** — fica registrado
+que sai de graça se algum dia for desejado, bastando um valor a mais no seletor.
+
 Grade de gêneros → segunda fileira de temas (subgênero) → resultados ordenados por
 `followedCount`. Filtro exato por UUID, sem falso positivo.
 
@@ -127,9 +131,21 @@ O problema: o assunto é inconsistente e **mangá vaza**. Buscar `horror` em
 `collection:comics` devolve *Berserk*. Só `superhero` ficou limpo (X-Men,
 Spider-Man).
 
-**Decisão:** grade de HQ **menor e conservadora**, só com os gêneros medidos como
-utilizáveis, e aviso na tela de que o acervo é irregular. Seis gêneros que
-funcionam valem mais que vinte que enganam.
+**Decisão:** grade de HQ **menor e conservadora**, só com gêneros comprovados por
+medição, e aviso na tela de que o acervo é irregular.
+
+**Pendência explícita para a implementação:** medi apenas três candidatos e
+**só um passou**:
+
+| gênero testado | resultado | veredito |
+|---|---|---|
+| `superhero` | X-Men, Amazing Spider-Man | ✅ aprovado |
+| `horror` | *Berserk* (mangá) | ❌ vaza |
+| `romance` | *Invincible* | ❌ deriva |
+
+A grade de HQ **não pode ser escrita sem antes medir cada gênero candidato** pelo
+mesmo método. Um gênero só entra depois de passar. Se poucos passarem, a grade
+nasce pequena — e isso é o resultado correto, não uma falha da implementação.
 
 ---
 
