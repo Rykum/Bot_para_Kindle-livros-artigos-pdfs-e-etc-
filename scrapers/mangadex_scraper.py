@@ -39,6 +39,7 @@ class MangaDexScraper(BaseScraper):
         media_types=SERIAL_MEDIA,
         # A API não tem busca livre de texto: 'tudo' cai em busca por título.
         search_modes=frozenset({'titulo', 'autor', 'tudo'}),
+        explora_genero=True,
     )
 
     def _author_ids(self, name: str, limit: int = 5) -> List[str]:

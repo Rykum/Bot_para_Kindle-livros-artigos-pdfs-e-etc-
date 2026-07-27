@@ -35,7 +35,7 @@ class ArchiveOrgScraper(BaseScraper):
         #: Abaixo disso, vale o último recurso: termos soltos com AND.
         self.last_resort_threshold = 3
 
-    capabilities = SourceCapabilities(media_types=SERIAL_MEDIA | BOOK_MEDIA)
+    capabilities = SourceCapabilities(media_types=SERIAL_MEDIA | BOOK_MEDIA, explora_genero=True)
 
     #: Termos de idioma por código, usados no filtro `language:`.
     _LANG_TERMS = {

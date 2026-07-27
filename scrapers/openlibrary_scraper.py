@@ -26,7 +26,7 @@ class OpenLibraryScraper(BaseScraper):
     no Archive.org, já pronto para download.
     """
 
-    capabilities = SourceCapabilities(media_types=BOOK_MEDIA)
+    capabilities = SourceCapabilities(media_types=BOOK_MEDIA, explora_genero=True)
 
     #: Campos pedidos à API (menos tráfego e resposta mais rápida).
     FIELDS = 'key,title,author_name,first_publish_year,ia,isbn,language,edition_count'

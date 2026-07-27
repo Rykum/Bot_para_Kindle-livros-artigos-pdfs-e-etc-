@@ -28,7 +28,7 @@ class ProjectGutenbergScraper(BaseScraper):
         )
         self.search_url = "https://gutendex.com/books"
     
-    capabilities = SourceCapabilities(media_types=BOOK_MEDIA)
+    capabilities = SourceCapabilities(media_types=BOOK_MEDIA, explora_genero=True)
 
     @staticmethod
     def _matches_author(book: Dict, query: str) -> bool:

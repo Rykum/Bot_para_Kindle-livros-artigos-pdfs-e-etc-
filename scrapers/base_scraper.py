@@ -58,6 +58,8 @@ class SourceCapabilities:
     needs_api_key: bool = False
     #: Lê HTML em vez de API: mais frágil, quebra quando o site muda.
     scraping_required: bool = False
+    #: A fonte sabe listar por gênero, sem termo de busca?
+    explora_genero: bool = False
 
     def handles(self, media_type: str) -> bool:
         """A fonte atende esse tipo de mídia?"""

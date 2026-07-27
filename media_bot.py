@@ -386,6 +386,54 @@ class MediaBot:
             print(f"   🧹 {removidos} duplicata(s) entre fontes removida(s).")
         return unicos
 
+    def explorar_genero(self, media_type, genero, subgenero=None, ordenacao="relevancia"):
+        """
+        Lista obras de um gênero, sem termo de busca.
+
+        Manhwa é mangá coreano: mesmo scraper, `originalLanguage` diferente.
+        """
+        from scrapers.generos import genero_por_nome
+
+        g = genero_por_nome(media_type, genero)
+        if g is None:
+            print(f"   ❌ Gênero '{genero}' não existe para {media_type}.")
+            return []
+
+        idioma_origem = {"manhwa": "ko", "manga": "ja"}.get(
+            (media_type or "").strip().lower(), "ja")
+
+        aplicaveis = [s for s in self.scrapers
+                      if getattr(s.capabilities, "explora_genero", False)
+                      and self._scraper_applicable(s, media_type)]
+
+        def chamar(scraper):
+            if isinstance(scraper, MangaDexScraper):
+                return scraper.explorar(g, subgenero, ordenacao, idioma_origem)
+            return scraper.explorar(g, subgenero, ordenacao)
+
+        respostas = {}
+        pool = ThreadPoolExecutor(max_workers=max(len(aplicaveis), 1))
+        try:
+            futuros = {pool.submit(chamar, s): s for s in aplicaveis}
+            try:
+                for futuro in as_completed(futuros, timeout=self.search_timeout):
+                    fonte = futuros[futuro]
+                    try:
+                        respostas[fonte.name] = futuro.result()
+                    except Exception as e:
+                        print(f"   ⚠️ Erro ao explorar em {fonte.name}: {e}")
+            except FuturesTimeout:
+                lentas = [s.name for f, s in futuros.items() if not f.done()]
+                print(f"   ⏱️ {', '.join(lentas)}: demorou demais, seguindo sem ela(s).")
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+        todos = []
+        for scraper in aplicaveis:
+            for r in (respostas.get(scraper.name) or []):
+                todos.append(self._serialize_result(r))
+        return self._dedupe_results(todos)
+
     def get_complete_series_chapters(self, series_title: str, source_name: str = "mangadex", media_type: str = "manga",
                                      language: str = "pt-br") -> List[float]:
         """
