@@ -32,6 +32,7 @@ class MangaDexScraper(BaseScraper):
         self.session.headers.update({
             'Accept': 'application/json',
         })
+        self._tabela_tags = None    # cache: nome em inglês -> UUID
     
     capabilities = SourceCapabilities(
         media_types=SERIAL_MEDIA,
@@ -50,6 +51,26 @@ class MangaDexScraper(BaseScraper):
         if not response:
             return []
         return [a.get('id') for a in response.json().get('data', []) if a.get('id')]
+
+    def _tag_ids(self, nomes):
+        """
+        Resolve nomes de tag para UUID.
+
+        A API do MangaDex só aceita UUID em `includedTags[]`. Gravar os UUIDs no
+        código os transformaria em bomba-relógio: se o MangaDex trocar um, o
+        gênero para de funcionar em silêncio. Resolver por nome custa uma chamada
+        (as 77 tags mudam raramente) e falha visível.
+        """
+        if self._tabela_tags is None:
+            resposta = self.make_request(f"{self.base_url}/manga/tag")
+            if not resposta:
+                return {}
+            self._tabela_tags = {
+                t["attributes"]["name"]["en"]: t["id"]
+                for t in resposta.json().get("data", [])
+                if t.get("id") and t.get("attributes", {}).get("name", {}).get("en")
+            }
+        return {n: self._tabela_tags[n] for n in nomes if n in self._tabela_tags}
 
     def search(self, query: str, formats: List[str] = None, language: str = None,
                search_by: str = "titulo") -> List[ScrapedResult]:
