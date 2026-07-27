@@ -1,6 +1,20 @@
 from pathlib import Path
+import re
 
 FRONT = Path(__file__).parent.parent / "frontend"
+
+
+def _regra(css, seletor):
+    """Extrai o corpo da regra de um seletor, sem casar com listas como 'html, body'.
+
+    Usa regex com multiline para evitar false positives com seletores combinados.
+    """
+    # Procura por um newline seguido de opicional whitespace, depois o seletor
+    # Isso evita casar 'body' dentro de 'html, body' na mesma linha
+    pattern = rf'(?:^|\n)\s*{re.escape(seletor)}\s*\{{([^}}]*)\}}'
+    m = re.search(pattern, css, re.MULTILINE)
+    assert m, f"regra '{seletor}' não encontrada"
+    return m.group(1)
 
 
 def test_fonts_are_self_hosted():
@@ -55,15 +69,22 @@ def test_no_slate_blue_leftovers_outside_root():
 
 def test_body_uses_inter_and_headings_use_serif():
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
-    corpo = css.split("body {")[1].split("}")[0]
+    corpo = _regra(css, "body")
     assert "'Inter'" in corpo
     assert "Segoe UI" in corpo, "manter como fallback"
-    h1 = css.split("h1 {")[1].split("}")[0]
+    h1 = _regra(css, "h1")
     assert "'Instrument Serif'" in h1
 
 
 def test_signature_keeps_the_editorial_italic():
     """'By Munhoz' é assinatura: serifa itálica creme, como na landing."""
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
-    assinatura = css.split(".signature b")[1].split("}")[0]
+    assinatura = _regra(css, ".signature b")
     assert "var(--cream)" in assinatura
+
+
+def test_body_keeps_its_box_model_reset():
+    """Sem margin:0 no body, Chromium aplica 8px e cria barra de rolagem indesejada."""
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    assert re.search(r'html,\s*body\s*\{[^}]*margin:\s*0', css), \
+        "o reset de margin do body sumiu — vai criar 8px de margem do user-agent"

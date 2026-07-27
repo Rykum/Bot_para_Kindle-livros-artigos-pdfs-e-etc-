@@ -72,7 +72,7 @@
 }
 
 * { box-sizing: border-box; }
-html { margin: 0; height: 100%; }
+html, body { margin: 0; height: 100%; }
 body {
   font-family:'Inter',"Segoe UI",system-ui,-apple-system,sans-serif;
   font-feature-settings:"cv05" 1,"cv11" 1,"ss01" 1;
