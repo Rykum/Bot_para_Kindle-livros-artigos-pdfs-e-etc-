@@ -92,3 +92,17 @@ def test_gutendex_uses_topic_and_popular(monkeypatch):
     sc.explorar(genero_por_nome("livro", "Terror"))
     assert cap["topic"] == "horror"
     assert cap["sort"] == "popular"
+
+
+def test_gutendex_warns_when_subgenre_is_discarded(monkeypatch, caplog):
+    """Gutendex não tem vocabulário para subgênero: silêncio faria o usuário
+    pensar que 'Distopia' filtrou quando na verdade veio ficção científica
+    inteira (mesmo bug que motivou o aviso da Open Library e do MangaDex)."""
+    import logging
+    sc = ProjectGutenbergScraper()
+    monkeypatch.setattr(sc, "make_request",
+                        lambda url, params=None, retries=0: FakeResp({"results": []}))
+    with caplog.at_level(logging.WARNING):
+        sc.explorar(genero_por_nome("livro", "Ficção científica"), subgenero="Distopia")
+    assert any("Distopia" in r.message for r in caplog.records), \
+        "subgênero descartado pela Gutendex precisa avisar"

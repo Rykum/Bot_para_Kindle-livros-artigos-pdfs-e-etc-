@@ -194,10 +194,27 @@ class ProjectGutenbergScraper(BaseScraper):
 
         return results
 
-    def explorar(self, genero, subgenero=None, ordenacao="relevancia"):
-        """Lista livros de domínio público de um gênero."""
+    def explorar(self, genero, subgenero=None, ordenacao="popular"):
+        """
+        Lista livros de domínio público de um gênero.
+
+        A Gutendex só tem uma ordenação (`sort=popular`); não existe endpoint
+        de relevância nem "mais lidos agora" separado. `ordenacao` é aceito só
+        para manter a mesma assinatura das outras fontes — o valor é sempre
+        ignorado, e o default reflete isso em vez de prometer relevância.
+
+        `subgenero` também não é usado: a Gutendex não tem um vocabulário de
+        assunto fino o bastante para refinar por subgênero (só `topic`, que já
+        é o gênero inteiro). Quem quiser refinamento por subgênero usa a Open
+        Library, que resolve isso no fan-out de livro.
+        """
         if genero is None or not genero.gutendex:
             return []
+        if subgenero:
+            logger.warning(
+                f"Gutendex: subgênero '{subgenero}' não é suportado; "
+                f"resultado cai para o gênero '{genero.nome}' inteiro, "
+                f"sem esse refinamento")
         return self._resultados_de({
             "topic": genero.gutendex,
             "sort": "popular",

@@ -92,7 +92,7 @@ class MangaDexScraper(BaseScraper):
         então ela é ao mesmo tempo viva e precisa — diferente de livro, onde a
         popularidade é global e vaza entre gêneros.
         """
-        if genero is None:
+        if genero is None or not genero.mangadex_tag:
             return []
 
         subgenero_tag = SUBGENERO_TAG_MANGADEX.get(subgenero, subgenero) if subgenero else None

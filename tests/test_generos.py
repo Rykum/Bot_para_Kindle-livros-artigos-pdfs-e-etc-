@@ -28,7 +28,10 @@ def test_every_book_genre_maps_to_an_english_term():
 
 
 def test_hq_grid_is_deliberately_small():
-    """Medido: só `superhero` passou; horror trazia Berserk, romance derivava."""
+    """Medido em collection:comics (top 4 por downloads): `superhero`, `western`
+    e `funny animal` passaram; `war`, `crime`, `romance`, `horror` e
+    `science fiction` foram reprovados (manual/artbook, manhwa/mangá,
+    Invincible fora do super-herói já coberto, ou mangá no topo)."""
     assert 0 < len(generos_de("hq")) <= 8
 
 

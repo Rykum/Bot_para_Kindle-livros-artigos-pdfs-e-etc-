@@ -1,4 +1,5 @@
 # tests/test_frontend_explorar.py
+import re
 from pathlib import Path
 
 FRONT = Path(__file__).parent.parent / "frontend"
@@ -31,6 +32,20 @@ def test_covers_degrade_without_breaking():
 
 
 def test_ordering_selector_is_hidden_outside_books():
-    """No mangá seria escolha falsa: followedCount já é vivo e preciso."""
+    """No mangá seria escolha falsa: followedCount já é vivo e preciso.
+
+    Antes este teste só checava a substring 'explorar-ordenacao', que aparece
+    4x no arquivo por outros motivos (id do elemento, listener de 'change',
+    leitura do .value) — apagar o bloco que esconde o seletor fora de 'livro'
+    deixava o teste verde. O regex abaixo ancora na lógica de fato: a
+    atribuição de .style.display condicionada a midia === "livro".
+    """
     js = (FRONT / "app.js").read_text(encoding="utf-8")
-    assert "explorar-ordenacao" in js
+    padrao = re.compile(
+        r'getElementById\("explorar-ordenacao"\)\.style\.display\s*=\s*'
+        r'\r?\n?\s*midia\s*===\s*"livro"\s*\?\s*""\s*:\s*"none"'
+    )
+    assert padrao.search(js), (
+        "seletor de ordenação precisa ficar escondido fora de 'livro' "
+        "(midia === \"livro\" ? \"\" : \"none\")"
+    )

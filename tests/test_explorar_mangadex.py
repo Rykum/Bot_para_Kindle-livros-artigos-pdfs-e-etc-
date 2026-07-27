@@ -87,3 +87,18 @@ def test_unresolved_subgenre_warns(monkeypatch, caplog):
         sc.explorar(genero_por_nome("manga", "Terror"), subgenero="NaoExiste")
     assert any("NaoExiste" in r.message for r in caplog.records), \
         "subgênero não resolvido precisa avisar"
+
+
+def test_exploring_hq_makes_no_network_call(monkeypatch):
+    """HQ está em SERIAL_MEDIA (capabilities do MangaDex inclui 'hq'), mas o
+    MangaDex não é fonte de HQ: Genero('Super-heróis', archive='superhero')
+    não tem mangadex_tag. Sem a guarda `not genero.mangadex_tag`, isso gastava
+    uma chamada de rede e logava 'gênero indisponível' — mensagem errada,
+    já que o problema não é disponibilidade, é a fonte não cobrir o tipo."""
+    sc = MangaDexScraper()
+
+    def fail(*a, **k):
+        raise AssertionError("MangaDex não deveria ser chamado para HQ")
+
+    monkeypatch.setattr(sc, "make_request", fail)
+    assert sc.explorar(genero_por_nome("hq", "Super-heróis")) == []

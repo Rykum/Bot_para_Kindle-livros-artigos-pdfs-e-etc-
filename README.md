@@ -47,8 +47,10 @@ Tela de descoberta: escolha um gênero e veja o que existe, sem digitar nada.
 
 - **Mangá e manhwa** — taxonomia oficial do MangaDex (gênero + tema), ordenados
   por seguidores. Manhwa é o mesmo acervo filtrado por idioma de origem coreano.
-- **Livro** — Open Library e Gutendex, ordenados por relevância do gênero, com
-  a opção "mais lidos agora". Só entra o que tem exemplar baixável.
+- **Livro** — Open Library (ordenada por relevância do gênero, com a opção
+  "mais lidos agora") e Gutendex (sempre por popularidade de download; não
+  tem relevância nem subgênero — refinar por subgênero é só a Open Library),
+  concatenadas. Só entra o que tem exemplar baixável.
 - **HQ** — Archive.org. Lista curta de propósito: o acervo é irregular e o
   assunto é inconsistente.
 
@@ -148,7 +150,8 @@ Executável via **`build.py`** (PyInstaller `--onefile --windowed`). A GUI antig
 ## 🧪 Testes
 
 ```bash
-py -3.13 -m pytest -q      # 288 testes
+py -3.13 -m pytest -q                      # 288 testes (6 exigem rede)
+py -3.13 -m pytest -q -m "not network"     # offline
 ```
 
 ---
