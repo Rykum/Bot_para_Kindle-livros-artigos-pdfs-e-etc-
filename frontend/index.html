@@ -23,6 +23,10 @@
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           Buscar
         </button>
+        <button class="nav-item" data-view="explorar">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="m15 9-4.5 1.5L9 15l4.5-1.5z"/></svg>
+          Explorar
+        </button>
         <button class="nav-item" data-view="library">
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           Biblioteca
@@ -81,6 +85,37 @@
           <div class="hint" id="search-by-hint" style="margin-top:6px">Não achou? <b>Qualquer campo</b> busca em todos os metadados do Archive.org e acha muito mais que só pelo título.</div>
         </div>
         <div id="search-results" class="card-grid"></div>
+      </section>
+
+      <!-- Explorar por gênero -->
+      <section class="view" id="view-explorar">
+        <div class="view-head">
+          <h1>Explorar</h1>
+          <div class="sub">Escolha um gênero e veja o que existe — sem digitar nada.</div>
+        </div>
+
+        <div class="panel">
+          <div class="search-bar">
+            <select id="explorar-midia" title="Tipo de mídia">
+              <option value="manga">manga</option>
+              <option value="manhwa">manhwa</option>
+              <option value="livro">livro</option>
+              <option value="hq">hq</option>
+            </select>
+            <select id="explorar-ordenacao" title="Ordenação">
+              <option value="relevancia">Melhores do gênero</option>
+              <option value="mais_lidos">Mais lidos agora</option>
+            </select>
+          </div>
+          <div id="genero-grid" class="quick-ranges" style="margin-top:14px"></div>
+          <div id="subgenero-row" class="quick-ranges" style="margin-top:10px"></div>
+          <div class="hint" id="explorar-aviso" style="margin-top:10px;display:none">
+            O acervo de HQ é irregular: o assunto é inconsistente e mangá às vezes aparece
+            junto. Por isso a lista de gêneros aqui é curta.
+          </div>
+        </div>
+
+        <div id="explorar-results" class="card-grid"></div>
       </section>
 
       <!-- Seletor de capítulos -->
