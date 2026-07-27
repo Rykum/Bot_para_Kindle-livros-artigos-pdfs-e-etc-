@@ -88,3 +88,11 @@ def test_body_keeps_its_box_model_reset():
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
     assert re.search(r'html,\s*body\s*\{[^}]*margin:\s*0', css), \
         "o reset de margin do body sumiu — vai criar 8px de margem do user-agent"
+
+
+def test_background_has_grain_and_glow_like_the_landing():
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    assert "feTurbulence" in css, "grão ausente"
+    assert "radial-gradient" in css, "brilho radial ausente"
+    assert "pointer-events:none" in css.replace(" ", ""), \
+        "a textura não pode capturar clique"
