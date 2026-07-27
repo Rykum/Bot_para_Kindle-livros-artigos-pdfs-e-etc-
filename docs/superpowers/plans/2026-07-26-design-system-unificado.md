@@ -243,14 +243,37 @@ git commit -m "feat(ui): paleta near-black e hairlines em alpha, iguais à landi
 
 - [ ] **Step 1: Write the failing test**
 
+> **Corrigido durante a execução.** A primeira versão deste teste usava
+> `css.split("body {")`, que casa com o `body` de dentro de `html, body {` e
+> devolve o trecho errado. O implementador, tentando fazê-lo passar, quebrou
+> `html, body` em duas regras e o `body` perdeu `margin: 0` — reintroduzindo a
+> margem padrão do navegador. O extrator abaixo é ancorado e não casa com
+> seletores em lista.
+
 ```python
+import re
+
+
+def _regra(css, seletor):
+    """Corpo da regra de um seletor, sem casar com listas como 'html, body'."""
+    m = re.search(rf'(?<![\w,\s-]){re.escape(seletor)}\s*\{{([^}}]*)\}}', css)
+    assert m, f"regra '{seletor}' não encontrada"
+    return m.group(1)
+
+
 def test_body_uses_inter_and_headings_use_serif():
     css = (FRONT / "styles.css").read_text(encoding="utf-8")
-    corpo = css.split("body {")[1].split("}")[0]
+    corpo = _regra(css, "body")
     assert "'Inter'" in corpo
     assert "Segoe UI" in corpo, "manter como fallback"
-    h1 = css.split("h1 {")[1].split("}")[0]
-    assert "'Instrument Serif'" in h1
+    assert "'Instrument Serif'" in _regra(css, "h1")
+
+
+def test_body_keeps_its_box_model_reset():
+    """Sem margin:0 no body, o Chromium aplica 8px e cria barra de rolagem."""
+    css = (FRONT / "styles.css").read_text(encoding="utf-8")
+    assert re.search(r'html,\s*body\s*\{[^}]*margin:\s*0', css), \
+        "o reset de margin do body sumiu"
 
 
 def test_signature_keeps_the_editorial_italic():
@@ -515,3 +538,11 @@ Nada a commitar; o deploy não gera arquivo. Se o `.vercel/` tiver mudado, ele j
 **O que NÃO fazer.** Não redesenhar componente por componente nesta rodada. A troca de tokens já muda o app inteiro, porque tudo já consome variáveis. Redesenho de componente é outro trabalho, e não foi pedido.
 
 **Verificação visual é obrigatória** nas Tasks 2, 4 e 5. CSS não tem tipo: teste de arquivo confirma que a regra existe, não que ela está bonita nem que a tela abre. Abra o app e olhe.
+
+**Lição da execução: teste que afirma sobre texto de CSS precisa de âncora.** O
+teste original da Task 3 partia o arquivo por `"body {"` — e casou com o `body`
+de dentro de `html, body {`. O implementador, em vez de consertar o teste,
+reestruturou o CSS de produção para caber nele, e o `body` perdeu `margin: 0`.
+Quando um teste e o código discordam, decida qual dos dois está errado **antes**
+de mudar qualquer um. Curvar a produção para satisfazer um teste ruim troca um
+problema visível por um invisível.
