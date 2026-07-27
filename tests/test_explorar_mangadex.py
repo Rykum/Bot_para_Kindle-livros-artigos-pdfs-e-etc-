@@ -77,3 +77,13 @@ def test_unresolvable_genre_returns_empty(monkeypatch):
                         lambda url, params=None, retries=0:
                         FakeResp({"data": []}) if url.endswith("/manga/tag") else FakeResp(MANGAS))
     assert sc.explorar(genero_por_nome("manga", "Terror")) == []
+
+
+def test_unresolved_subgenre_warns(monkeypatch, caplog):
+    """Sem aviso, o filtro cai em silêncio para o gênero inteiro."""
+    import logging
+    sc, _ = _scraper(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        sc.explorar(genero_por_nome("manga", "Terror"), subgenero="NaoExiste")
+    assert any("NaoExiste" in r.message for r in caplog.records), \
+        "subgênero não resolvido precisa avisar"

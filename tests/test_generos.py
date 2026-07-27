@@ -43,8 +43,14 @@ def test_unknown_media_type_yields_nothing():
     assert generos_de("") == ()
 
 
-def test_every_manga_subgenre_maps_to_a_mangadex_tag():
-    """Subgênero sem tag cai para filtro só de gênero, sem avisar o usuário."""
+def test_every_manga_subgenre_has_a_translation_entry():
+    """
+    Trava só a sincronia entre _MANGA e SUBGENERO_TAG_MANGADEX (toda chave
+    tem tradução). generos.py é sem rede de propósito, então este teste NÃO
+    confirma que o valor (ex.: "Office Workers") ainda existe como tag na
+    API do MangaDex — essa verificação é feita nos testes que batem na rede
+    de verdade.
+    """
     from scrapers.generos import SUBGENERO_TAG_MANGADEX, generos_de
     faltando = [
         (g.nome, s)
@@ -52,4 +58,4 @@ def test_every_manga_subgenre_maps_to_a_mangadex_tag():
         for s in g.subgeneros
         if s not in SUBGENERO_TAG_MANGADEX
     ]
-    assert not faltando, f"subgêneros sem tag do MangaDex: {faltando}"
+    assert not faltando, f"subgêneros sem entrada de tradução: {faltando}"

@@ -46,8 +46,12 @@ _MANGA = (
 #     e virou "Trabalho" -> tema real "Office Workers".
 #   - "Detetive" (Mistério) não tem tag "Detective"; mapeado para o tema real
 #     mais próximo, "Police" (histórias de investigação policial).
-# Ver tests/test_generos.py::test_every_manga_subgenre_maps_to_a_mangadex_tag,
-# que trava a sincronia entre este dict e _MANGA acima.
+#
+# Este módulo é sem rede de propósito (ver docstring do arquivo), então
+# tests/test_generos.py::test_every_manga_subgenre_has_a_translation_entry só
+# trava que toda chave de _MANGA tem entrada aqui — não que os VALORES
+# ("Office Workers", "Police", ...) ainda existem como tag na API real. Essa
+# verificação fica para os testes que batem na rede de verdade.
 SUBGENERO_TAG_MANGADEX = {
     "Artes marciais": "Martial Arts",
     "Samurais": "Samurai",
