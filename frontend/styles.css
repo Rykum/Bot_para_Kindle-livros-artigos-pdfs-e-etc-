@@ -17,40 +17,58 @@
 }
 
 :root {
-  /* superfícies — minimalista, plano */
-  --bg: #0d1420;
-  --surface: #121a28;
-  --surface-2: #161f2f;
-  --surface-3: #1b2536;
-  --border: #212c3d;
-  --border-soft: #1a2333;
+  /* superfícies — near-black frio (mesma paleta da landing) */
+  --ink-950:#08090c;
+  --ink-900:#0b0d12;
+  --ink-850:#0e1117;
+  --ink-800:#11151d;
+  --ink-750:#151a23;
 
-  /* texto */
-  --text: #e6ebf3;
-  --muted: #8c99ac;
-  --faint: #5c6a7e;
+  /* linhas em alpha: hairlines que respiram, nunca "caixinhas" */
+  --line:rgba(255,255,255,.065);
+  --line-2:rgba(255,255,255,.11);
+  --line-3:rgba(255,255,255,.18);
 
-  /* acento único, contido */
-  --accent: #4b8bf4;
-  --accent-hover: #3d7ce8;
-  --accent-soft: rgba(75, 139, 244, .12);
-  --success: #34b98a;
-  --success-soft: rgba(52, 185, 138, .12);
-  --warn: #d99a3a;
-  --warn-soft: rgba(217, 154, 58, .12);
-  --danger: #e06666;
-  --danger-soft: rgba(224, 102, 102, .12);
+  /* texto — 3 níveis, sem mais */
+  --tx:#eceef3;
+  --tx-2:#98a1b2;
+  --tx-3:#616a7b;
 
-  /* forma — sem sombras (flat) */
-  --r-sm: 8px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --shadow: none;
-  --shadow-sm: none;
-  --ring: 0 0 0 3px var(--accent-soft);
+  /* acentos: azul funcional + creme editorial */
+  --blue:#7ea6ff;
+  --blue-2:#a8c3ff;
+  --blue-soft:rgba(126,166,255,.10);
+  --cream:#e8d5b0;
 
-  /* escala de espaçamento (base 4) */
-  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px;
+  --ok:#5ec9a0;
+  --ok-soft:rgba(94,201,160,.12);
+  --warn:#d7a355;
+  --warn-soft:rgba(215,163,85,.10);
+  --danger:#e06666;
+  --danger-soft:rgba(224,102,102,.12);
+
+  /* apelidos: mantêm as regras existentes funcionando */
+  --bg:var(--ink-950);
+  --surface:var(--ink-900);
+  --surface-2:var(--ink-850);
+  --surface-3:var(--ink-800);
+  --border:var(--line);
+  --border-soft:var(--line);
+  --text:var(--tx);
+  --muted:var(--tx-2);
+  --faint:var(--tx-3);
+  --accent:var(--blue);
+  --accent-hover:var(--blue-2);
+  --accent-soft:var(--blue-soft);
+  --success:var(--ok);
+  --success-soft:var(--ok-soft);
+
+  --r-sm:8px; --r-md:12px; --r-lg:18px;
+  --shadow:none; --shadow-sm:none;
+  --ring:0 0 0 3px var(--blue-soft);
+  --ease:cubic-bezier(.22,.61,.36,1);
+
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px; --s-8:32px;
 }
 
 * { box-sizing: border-box; }
@@ -211,7 +229,7 @@ select { cursor: pointer; appearance: none;
   transition: transform .08s, filter .12s, background .12s, border-color .12s;
   white-space: nowrap;
 }
-.btn:hover { filter: brightness(1.12); border-color: #2c3d61; }
+.btn:hover { filter: brightness(1.12); border-color: var(--line-3); }
 .btn:active { transform: translateY(1px); }
 .btn:focus-visible { outline: none; box-shadow: var(--ring); }
 .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
@@ -231,7 +249,7 @@ select { cursor: pointer; appearance: none;
   box-shadow: var(--shadow-sm);
   transition: transform .12s, border-color .12s, box-shadow .12s;
 }
-.card:hover { border-color: #2b3a52; }
+.card:hover { border-color: var(--line-3); }
 .card h3 { margin: 0 0 4px; font-size: 15px; color: #f8fafc; line-height: 1.3; }
 .card .muted { font-size: 12.5px; color: var(--muted); }
 .card .cover {
@@ -286,7 +304,7 @@ select { cursor: pointer; appearance: none;
   border-radius: var(--r-md); padding: 10px var(--s-4);
   transition: border-color .12s;
 }
-.queue-item:hover { border-color: #2c3d61; }
+.queue-item:hover { border-color: var(--line-3); }
 .queue-item .title { flex: 1; font-size: 13.5px; font-weight: 500; }
 .queue-item .title small { color: var(--muted); font-weight: 400; }
 .queue-badge {
@@ -323,6 +341,6 @@ select { cursor: pointer; appearance: none;
 
 /* barra de rolagem sutil */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #24334f; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-thumb:hover { background: #30456a; background-clip: content-box; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
