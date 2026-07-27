@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Media Bot PT-BR — sua biblioteca, baixada e organizada</title>
-<meta name="description" content="Aplicativo desktop em Python que busca, baixa e organiza mangás, livros, HQs e artigos — fila persistente, metadados ComicInfo.xml e exportação pronta para Komga e Kavita." />
+<meta name="description" content="Aplicativo desktop em Python que busca por título ou por autor em 9 fontes abertas, baixa e organiza mangás, livros, HQs e artigos — fila persistente, metadados ComicInfo.xml e exportação pronta para Komga e Kavita." />
 <meta name="author" content="Munhoz" />
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#08090c" />
@@ -521,7 +521,7 @@ footer{border-top:1px solid var(--line);padding:40px 0 52px;}
       <div class="card" data-reveal>
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.35-4.35"/></svg>
         <h3>Busca multi-fonte, com idioma</h3>
-        <p>Mangá, manhwa e HQ pelo MangaDex (API oficial); livros e artigos pelo Archive.org e Project Gutenberg.</p>
+        <p>Mangá, manhwa e HQ pelo MangaDex e Archive.org; livros e artigos por outras sete fontes, de Open Library a arXiv.</p>
         <p>Seletor de idioma na busca — e cada resultado mostra o idioma real que veio.</p>
       </div>
 
@@ -644,7 +644,7 @@ footer{border-top:1px solid var(--line);padding:40px 0 52px;}
         <li><b>app/bot_service.py</b><span>Worker serial: todas as operações do bot em uma única thread.</span></li>
         <li><b>media_bot.py</b><span>Orquestra scrapers, download, retry, fallback e biblioteca.</span></li>
         <li><b>download_queue.py</b><span>Fila persistente em SQLite, com estado por item.</span></li>
-        <li><b>scrapers/</b><span>MangaDex, Archive.org e Gutenberg sob um contrato comum.</span></li>
+        <li><b>scrapers/</b><span>9 fontes — de MangaDex a arXiv — sob um contrato comum.</span></li>
         <li><b>output_writer.py</b><span>Escreve o CBZ e injeta o ComicInfo.xml.</span></li>
         <li><b>komga_exporter.py</b><span>Monta a árvore de pastas que os servidores leem.</span></li>
       </ul>

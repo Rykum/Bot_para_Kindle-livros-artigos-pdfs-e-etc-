@@ -16,3 +16,14 @@ def test_landing_mentions_author_search_and_where_to_find():
     html = SITE.read_text(encoding="utf-8")
     assert "por autor" in html.lower()
     assert "onde encontrar" in html.lower()
+
+
+def test_landing_never_claims_a_stale_closed_list_of_sources():
+    """A página se contradizia: 9 fontes na tabela, 3 num card acima."""
+    html = SITE.read_text(encoding="utf-8")
+    for obsoleta in [
+        "Archive.org e Project Gutenberg",
+        "MangaDex, Archive.org e Gutenberg",
+    ]:
+        assert obsoleta not in html, \
+            f"lista fechada desatualizada na landing: {obsoleta!r}"
