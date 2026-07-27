@@ -26,7 +26,7 @@ class Genero:
 _MANGA = (
     Genero("Ação", ("Artes marciais", "Samurais", "Militar"), mangadex_tag="Action"),
     Genero("Aventura", ("Sobrevivência", "Viagem no tempo"), mangadex_tag="Adventure"),
-    Genero("Comédia", ("Paródia", "Fatia de vida"), mangadex_tag="Comedy"),
+    Genero("Comédia", ("Trabalho", "Fatia de vida"), mangadex_tag="Comedy"),
     Genero("Drama", ("Tragédia", "Psicológico"), mangadex_tag="Drama"),
     Genero("Fantasia", ("Isekai", "Magia", "Demônios"), mangadex_tag="Fantasy"),
     Genero("Terror", ("Fantasmas", "Monstros", "Psicológico"), mangadex_tag="Horror"),
@@ -37,6 +37,40 @@ _MANGA = (
     Genero("Histórico", ("Samurais", "Militar"), mangadex_tag="Historical"),
     Genero("Sobrenatural", ("Demônios", "Fantasmas", "Magia"), mangadex_tag="Supernatural"),
 )
+
+# Subgênero é exibido em português na UI, mas a API do MangaDex só conhece o
+# nome da tag em inglês. Medido contra GET https://api.mangadex.org/manga/tag
+# (77 tags reais, sem locale pt-br) — cada entrada abaixo tem correspondência
+# confirmada. Duas trocas em relação a uma primeira tentativa:
+#   - "Paródia" (Comédia) não tem tag equivalente ("Parody" não existe na API)
+#     e virou "Trabalho" -> tema real "Office Workers".
+#   - "Detetive" (Mistério) não tem tag "Detective"; mapeado para o tema real
+#     mais próximo, "Police" (histórias de investigação policial).
+# Ver tests/test_generos.py::test_every_manga_subgenre_maps_to_a_mangadex_tag,
+# que trava a sincronia entre este dict e _MANGA acima.
+SUBGENERO_TAG_MANGADEX = {
+    "Artes marciais": "Martial Arts",
+    "Samurais": "Samurai",
+    "Militar": "Military",
+    "Sobrevivência": "Survival",
+    "Viagem no tempo": "Time Travel",
+    "Trabalho": "Office Workers",
+    "Fatia de vida": "Slice of Life",
+    "Tragédia": "Tragedy",
+    "Psicológico": "Psychological",
+    "Isekai": "Isekai",
+    "Magia": "Magic",
+    "Demônios": "Demons",
+    "Fantasmas": "Ghosts",
+    "Monstros": "Monsters",
+    "Detetive": "Police",
+    "Crime": "Crime",
+    "Harém": "Harem",
+    "Escolar": "School Life",
+    "Mechas": "Mecha",
+    "Realidade virtual": "Virtual Reality",
+    "Aliens": "Aliens",
+}
 
 _LIVRO = (
     Genero("Ficção científica", ("Distopia", "Space opera", "Cyberpunk"),

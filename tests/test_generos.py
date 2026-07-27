@@ -41,3 +41,15 @@ def test_lookup_by_name_is_accent_and_case_insensitive():
 def test_unknown_media_type_yields_nothing():
     assert generos_de("artigo") == ()
     assert generos_de("") == ()
+
+
+def test_every_manga_subgenre_maps_to_a_mangadex_tag():
+    """Subgênero sem tag cai para filtro só de gênero, sem avisar o usuário."""
+    from scrapers.generos import SUBGENERO_TAG_MANGADEX, generos_de
+    faltando = [
+        (g.nome, s)
+        for g in generos_de("manga")
+        for s in g.subgeneros
+        if s not in SUBGENERO_TAG_MANGADEX
+    ]
+    assert not faltando, f"subgêneros sem tag do MangaDex: {faltando}"

@@ -10,34 +10,9 @@ import logging
 import requests
 from typing import List, Dict, Optional
 from .base_scraper import BaseScraper, ScrapedResult, SourceCapabilities, SERIAL_MEDIA
+from .generos import SUBGENERO_TAG_MANGADEX
 
 logger = logging.getLogger(__name__)
-
-# Subgênero é exibido em português (ver scrapers/generos.py), mas a API do
-# MangaDex só conhece o nome da tag em inglês. Medido contra GET /manga/tag:
-# "Paródia" e "Detetive" não têm tag equivalente e ficam de fora de propósito
-# — como qualquer nome desconhecido, _tag_ids simplesmente omite (não inventa).
-_SUBGENERO_TAG_EN = {
-    "Artes marciais": "Martial Arts",
-    "Samurais": "Samurai",
-    "Militar": "Military",
-    "Sobrevivência": "Survival",
-    "Viagem no tempo": "Time Travel",
-    "Fatia de vida": "Slice of Life",
-    "Tragédia": "Tragedy",
-    "Psicológico": "Psychological",
-    "Isekai": "Isekai",
-    "Magia": "Magic",
-    "Demônios": "Demons",
-    "Fantasmas": "Ghosts",
-    "Monstros": "Monsters",
-    "Crime": "Crime",
-    "Harém": "Harem",
-    "Escolar": "School Life",
-    "Mechas": "Mecha",
-    "Realidade virtual": "Virtual Reality",
-    "Aliens": "Aliens",
-}
 
 
 class MangaDexScraper(BaseScraper):
@@ -119,9 +94,11 @@ class MangaDexScraper(BaseScraper):
         if genero is None:
             return []
 
+        subgenero_tag = SUBGENERO_TAG_MANGADEX.get(subgenero, subgenero) if subgenero else None
+
         desejadas = [genero.mangadex_tag]
-        if subgenero:
-            desejadas.append(_SUBGENERO_TAG_EN.get(subgenero, subgenero))
+        if subgenero_tag:
+            desejadas.append(subgenero_tag)
         ids = self._tag_ids([n for n in desejadas if n])
 
         tag_principal = ids.get(genero.mangadex_tag)
@@ -130,6 +107,12 @@ class MangaDexScraper(BaseScraper):
                 f"MangaDex: tag '{genero.mangadex_tag}' não resolvida; "
                 f"gênero '{genero.nome}' indisponível")
             return []
+
+        if subgenero_tag and subgenero_tag not in ids:
+            logger.warning(
+                f"MangaDex: subgênero '{subgenero}' sem tag correspondente "
+                f"(esperava '{subgenero_tag}'); resultado cai para o gênero "
+                f"'{genero.nome}' inteiro, sem esse refinamento")
 
         params = {
             "includedTags[]": [i for i in ids.values()],
