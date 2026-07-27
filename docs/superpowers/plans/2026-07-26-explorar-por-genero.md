@@ -376,6 +376,9 @@ def test_filters_by_tag_uuid_and_orders_by_followers(monkeypatch):
 
 
 def test_subgenre_adds_a_second_tag(monkeypatch):
+    # "Fantasmas" é o rótulo em português; o MangaDex só conhece "Ghosts".
+    # A tradução vive em SUBGENERO_TAG_MANGADEX, em scrapers/generos.py,
+    # ao lado da taxonomia — e há teste de sincronia lá.
     sc, cap = _scraper(monkeypatch)
     sc.explorar(genero_por_nome("manga", "Terror"), subgenero="Fantasmas")
     assert set(cap["includedTags[]"]) == {"uuid-horror", "uuid-ghosts"}
@@ -1489,6 +1492,17 @@ git commit -m "docs: documenta a exploração por gênero"
 ---
 
 ## Notas para quem executar
+
+**Lição da execução: os rótulos são em português, as APIs falam inglês.** A
+primeira versão deste plano prescrevia, na mesma Task 3, um teste passando
+`subgenero="Fantasmas"` e uma implementação que só resolvia nomes de tag em
+inglês — o código não fazia passar o próprio teste. A tradução
+(`SUBGENERO_TAG_MANGADEX`) mora em `scrapers/generos.py`, junto da taxonomia que
+ela descreve, com teste travando que todo subgênero listado tenha tag. Sem esse
+teste, um subgênero sem tag cai em silêncio para filtro só de gênero: o usuário
+clica em "Detetive", vê "Mistério" inteiro, e nada avisa que o refinamento não
+aconteceu. O mesmo vale para qualquer par rótulo-em-português / termo-de-API que
+aparecer daqui pra frente.
 
 **A Task 5 tem uma medição antes do código, e ela não é opcional.** A grade de HQ nasce do que passar no Step 1. Se só `superhero` sobreviver, a grade tem um item. Isso é o resultado correto: a spec (§5.3) decidiu que seis gêneros que funcionam valem mais que vinte que enganam.
 
